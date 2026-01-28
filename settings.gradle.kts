@@ -1,5 +1,7 @@
 rootProject.name = "bundle"
 
+include("bundle")
+
 pluginManagement {
     repositories {
         mavenCentral()
