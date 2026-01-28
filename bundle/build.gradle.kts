@@ -2,15 +2,12 @@ plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
     application
-    `maven-publish`
-    signing
+    id("com.vanniktech.maven.publish")
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
-    withSourcesJar()
-    withJavadocJar()
 }
 
 kotlin {
@@ -38,53 +35,60 @@ tasks.test {
     useJUnitPlatform()
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
+val publishVersion: String? = providers.gradleProperty("VERSION_NAME").orNull
 
-            pom {
-                name.set(property("POM_NAME").toString())
-                description.set(property("POM_DESCRIPTION").toString())
-                url.set(property("POM_URL").toString())
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    signAllPublications()
 
-                licenses {
-                    license {
-                        name.set(property("POM_LICENCE_NAME").toString())
-                        url.set(property("POM_LICENCE_URL").toString())
-                        distribution.set(property("POM_LICENCE_DIST").toString())
-                    }
-                }
+    coordinates(
+        groupId = property("GROUP").toString(),
+        artifactId = "bundle",
+        version = publishVersion ?: "0.0.0-LOCAL"
+    )
 
-                developers {
-                    developer {
-                        id.set(property("POM_DEVELOPER_ID").toString())
-                        name.set(property("POM_DEVELOPER_NAME").toString())
-                        url.set(property("POM_DEVELOPER_URL").toString())
-                    }
-                }
+    pom {
+        name.set(property("POM_NAME").toString())
+        description.set(property("POM_DESCRIPTION").toString())
+        url.set(property("POM_URL").toString())
+        inceptionYear.set("2025")
 
-                scm {
-                    url.set(property("POM_SCM_URL").toString())
-                    connection.set(property("POM_SCM_CONNECTION").toString())
-                    developerConnection.set(property("POM_SCM_DEV_CONNECTION").toString())
-                }
+        licenses {
+            license {
+                name.set(property("POM_LICENCE_NAME").toString())
+                url.set(property("POM_LICENCE_URL").toString())
+                distribution.set(property("POM_LICENCE_DIST").toString())
             }
+        }
+
+        developers {
+            developer {
+                id.set(property("POM_DEVELOPER_ID").toString())
+                name.set(property("POM_DEVELOPER_NAME").toString())
+                url.set(property("POM_DEVELOPER_URL").toString())
+            }
+        }
+
+        scm {
+            url.set(property("POM_SCM_URL").toString())
+            connection.set(property("POM_SCM_CONNECTION").toString())
+            developerConnection.set(property("POM_SCM_DEV_CONNECTION").toString())
         }
     }
 }
 
-signing {
-    val signingKeyId = providers.environmentVariable("RUNWORK_SIGNING_KEY_ID").orNull
-    val signingKey = providers.environmentVariable("RUNWORK_SIGNING_KEY").orNull
-    val signingPassword = providers.environmentVariable("RUNWORK_SIGNING_PASSWORD").orNull
-
-    if (signingKeyId != null && signingKey != null && signingPassword != null) {
-        useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
-        sign(publishing.publications["maven"])
+// Fail fast if VERSION_NAME is not set when publishing to Maven Central
+val validateVersionForPublish by tasks.registering {
+    doLast {
+        if (publishVersion == null) {
+            throw GradleException(
+                "VERSION_NAME must be set when publishing to Maven Central. " +
+                "Use: ./gradlew :bundle:publishAndReleaseToMavenCentral -PVERSION_NAME=x.y.z"
+            )
+        }
     }
 }
 
-tasks.withType<Sign>().configureEach {
-    onlyIf { !version.toString().endsWith("SNAPSHOT") }
+tasks.matching { it.name.contains("MavenCentral") || it.name == "signMavenPublication" }.configureEach {
+    dependsOn(validateVersionForPublish)
 }

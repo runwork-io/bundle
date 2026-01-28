@@ -36,13 +36,13 @@ jobs:
           fi
 
       - name: Run tests
-        run: ./gradlew :bundle:test -PVERSION_NAME=${{ steps.version.outputs.version }}
+        run: ./gradlew :bundle:test -PVERSION_NAME="${{ steps.version.outputs.version }}"
 
       - name: Publish to Maven Central
-        run: ./gradlew :bundle:publish -PVERSION_NAME=${{ steps.version.outputs.version }}
+        run: ./gradlew :bundle:publishAndReleaseToMavenCentral -PVERSION_NAME="${{ steps.version.outputs.version }}"
         env:
-          SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          RUNWORK_SIGNING_KEY_ID: ${{ secrets.RUNWORK_SIGNING_KEY_ID }}
-          RUNWORK_SIGNING_KEY: ${{ secrets.RUNWORK_SIGNING_KEY }}
-          RUNWORK_SIGNING_PASSWORD: ${{ secrets.RUNWORK_SIGNING_PASSWORD }}
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
