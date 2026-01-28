@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
     kotlin("jvm")
@@ -41,10 +40,7 @@ tasks.test {
 val publishVersion: String? = providers.gradleProperty("VERSION_NAME").orNull
 
 mavenPublishing {
-    publishToMavenCentral(
-        host = SonatypeHost.CENTRAL_PORTAL,
-        automaticRelease = true
-    )
+    publishToMavenCentral(automaticRelease = true)
     signAllPublications()
 
     coordinates(
