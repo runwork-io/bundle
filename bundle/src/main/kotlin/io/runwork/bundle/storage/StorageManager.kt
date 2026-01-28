@@ -76,6 +76,11 @@ class StorageManager(
      * 3. Create a hard link from version/{path} to CAS/{hash}
      * 4. Fall back to copy if hard link fails (e.g., cross-filesystem)
      *
+     * Note: If this function fails partway through (e.g., after creating some hard links),
+     * the partial version directory remains on disk. On retry, existing files are skipped,
+     * allowing recovery from transient failures. The `.complete` marker file is only created
+     * after all files are successfully linked, so partial versions won't be considered valid.
+     *
      * @param manifest The bundle manifest describing all files
      * @throws IllegalStateException if a required file is missing from CAS
      */
@@ -93,10 +98,11 @@ class StorageManager(
 
             val destPath = versionDir.resolve(file.path)
 
+            // Skip if file already exists (allows recovery from partial failures)
+            if (withContext(Dispatchers.IO) { Files.exists(destPath) }) continue
+
             withContext(Dispatchers.IO) {
                 Files.createDirectories(destPath.parent)
-
-                if (Files.exists(destPath)) return@withContext
 
                 try {
                     // Try hard link first (most efficient, no data duplication)
@@ -238,6 +244,9 @@ class StorageManager(
      * This uses inode comparison for hard links to avoid expensive hash computation.
      * For files that aren't hard links (e.g., on Windows with copy fallback),
      * we still need to compute hashes.
+     *
+     * Files are processed sequentially (one at a time) to minimize system load,
+     * as this cleanup runs in the background and shouldn't impact foreground operations.
      */
     private suspend fun cleanupOrphanedCasFiles() {
         // Build a set of CAS file inodes that are referenced by version directories

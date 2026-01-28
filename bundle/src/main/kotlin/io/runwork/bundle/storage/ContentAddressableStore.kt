@@ -76,6 +76,8 @@ class ContentAddressableStore(
 
     /**
      * Move a file with atomic move, falling back to copy-then-delete if not supported.
+     *
+     * Note: This function performs I/O and must be called from within a Dispatchers.IO context.
      */
     private fun moveFile(source: Path, dest: Path) {
         try {

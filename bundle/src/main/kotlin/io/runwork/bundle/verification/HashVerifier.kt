@@ -8,7 +8,6 @@ import okio.HashingSource
 import okio.Path.Companion.toOkioPath
 import okio.blackholeSink
 import okio.buffer
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -47,7 +46,7 @@ object HashVerifier {
      * @return true if the hash matches, false otherwise
      */
     suspend fun verify(path: Path, expectedHash: String): Boolean {
-        if (!withContext(Dispatchers.IO) { Files.exists(path) }) return false
+        if (!withContext(Dispatchers.IO) { java.nio.file.Files.exists(path) }) return false
         val actualHash = computeHash(path)
         return normalizeHash(actualHash) == normalizeHash(expectedHash)
     }
