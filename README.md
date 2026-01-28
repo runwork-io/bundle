@@ -59,7 +59,3 @@ Create signed bundles using the CLI:
     --platform macos-arm64 \
     --main-class com.example.MainKt"
 ```
-
-## License
-
-Apache License 2.0
