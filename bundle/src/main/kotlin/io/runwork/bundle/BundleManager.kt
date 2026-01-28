@@ -265,24 +265,6 @@ class BundleManager(
     }
 
     /**
-     * Verify all files in the current bundle.
-     *
-     * @return List of files that failed verification (empty if all passed)
-     * @deprecated Use verifyLocalBundle() instead for better error handling
-     */
-    @Deprecated(
-        message = "Use verifyLocalBundle() for better error handling",
-        replaceWith = ReplaceWith("verifyLocalBundle()")
-    )
-    suspend fun verifyBundle(): List<VerificationFailure> {
-        return when (val result = verifyLocalBundle()) {
-            is BundleVerificationResult.Valid -> emptyList()
-            is BundleVerificationResult.Corrupted -> result.failures
-            is BundleVerificationResult.NoBundleInstalled -> emptyList()
-        }
-    }
-
-    /**
      * Repair files that failed verification by re-downloading them.
      *
      * @param failures List of verification failures to repair

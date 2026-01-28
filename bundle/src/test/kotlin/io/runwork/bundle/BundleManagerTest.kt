@@ -242,28 +242,29 @@ class BundleManagerTest {
     }
 
     @Test
-    fun verifyBundle_returnsEmptyForValid() = runTest {
+    fun verifyLocalBundle_returnsValidForValid() = runTest {
         val content = "Valid content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         setupInstalledVersion(42, listOf("file.txt" to content))
 
-        val failures = bundleManager.verifyBundle()
+        val result = bundleManager.verifyLocalBundle()
 
-        assertTrue(failures.isEmpty())
+        assertIs<BundleVerificationResult.Valid>(result)
     }
 
     @Test
-    fun verifyBundle_returnsFailuresForTampered() = runTest {
+    fun verifyLocalBundle_returnsCorruptedForTampered() = runTest {
         val content = "Original content"
         setupInstalledVersion(42, listOf("file.txt" to content))
 
         // Tamper with file
         Files.writeString(tempDir.resolve("versions/42/file.txt"), "Tampered content")
 
-        val failures = bundleManager.verifyBundle()
+        val result = bundleManager.verifyLocalBundle()
 
-        assertEquals(1, failures.size)
-        assertEquals("file.txt", failures[0].path)
+        assertIs<BundleVerificationResult.Corrupted>(result)
+        assertEquals(1, result.failures.size)
+        assertEquals("file.txt", result.failures[0].path)
     }
 
     @Test
@@ -343,14 +344,16 @@ class BundleManagerTest {
         // Delete the hard link in version directory (simulates corruption)
         Files.delete(tempDir.resolve("versions/42/file.txt"))
 
-        val failures = bundleManager.verifyBundle()
+        val verifyResult = bundleManager.verifyLocalBundle()
+        assertIs<BundleVerificationResult.Corrupted>(verifyResult)
+        val failures = verifyResult.failures
         assertEquals(1, failures.size)
 
         // File is still in CAS, so no download needed - just re-link
         // The repair should re-link from CAS
-        val result = bundleManager.repairBundle(failures) {}
+        val repairResult = bundleManager.repairBundle(failures) {}
 
-        assertIs<RepairResult.Success>(result)
+        assertIs<RepairResult.Success>(repairResult)
 
         // Verify file is now present and correct
         assertTrue(Files.exists(tempDir.resolve("versions/42/file.txt")))
