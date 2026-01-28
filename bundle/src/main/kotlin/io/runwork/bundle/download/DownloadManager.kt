@@ -14,8 +14,10 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.Closeable
 import java.io.IOException
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.zip.ZipInputStream
@@ -24,13 +26,14 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * Manages bundle downloads with OkHttp.
+ * Manages bundle downloads with OkHttp for HTTP/HTTPS URLs and direct file I/O for file:// URLs.
  *
  * Features:
  * - Full bundle ZIP or incremental file downloads
  * - Byte-level progress reporting
  * - Resume support via existing file hash checking
  * - Automatic hash verification after download
+ * - Support for file:// URLs for local testing
  */
 class DownloadManager(
     private val baseUrl: String,
@@ -44,6 +47,8 @@ class DownloadManager(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private fun isFileUrl(url: String): Boolean = url.startsWith("file://")
+
     /**
      * Fetch the latest manifest from the server.
      *
@@ -51,8 +56,41 @@ class DownloadManager(
      * @throws DownloadException if the fetch fails
      */
     suspend fun fetchManifest(): BundleManifest {
+        val url = "$baseUrl/manifest.json"
+        return if (isFileUrl(url)) {
+            fetchManifestFromFile(url)
+        } else {
+            fetchManifestFromHttp(url)
+        }
+    }
+
+    private suspend fun fetchManifestFromFile(url: String): BundleManifest = withContext(Dispatchers.IO) {
+        val path = try {
+            Paths.get(URI(url))
+        } catch (e: Exception) {
+            throw DownloadException("Invalid file URL: $url", e)
+        }
+
+        if (!Files.exists(path)) {
+            throw DownloadException("File not found: $path")
+        }
+
+        val body = try {
+            Files.readString(path)
+        } catch (e: IOException) {
+            throw DownloadException("Failed to read file: $path", e)
+        }
+
+        try {
+            json.decodeFromString<BundleManifest>(body)
+        } catch (e: Exception) {
+            throw DownloadException("Failed to parse manifest", e)
+        }
+    }
+
+    private suspend fun fetchManifestFromHttp(url: String): BundleManifest {
         val request = Request.Builder()
-            .url("$baseUrl/manifest.json")
+            .url(url)
             .get()
             .build()
 
@@ -222,6 +260,59 @@ class DownloadManager(
     }
 
     private suspend fun downloadFile(
+        url: String,
+        destPath: Path,
+        expectedSize: Long,
+        progressCallback: suspend (Long, Long) -> Unit
+    ) {
+        if (isFileUrl(url)) {
+            downloadFileFromFilesystem(url, destPath, expectedSize, progressCallback)
+        } else {
+            downloadFileFromHttp(url, destPath, expectedSize, progressCallback)
+        }
+    }
+
+    private suspend fun downloadFileFromFilesystem(
+        url: String,
+        destPath: Path,
+        expectedSize: Long,
+        progressCallback: suspend (Long, Long) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val sourcePath = try {
+            Paths.get(URI(url))
+        } catch (e: Exception) {
+            throw DownloadException("Invalid file URL: $url", e)
+        }
+
+        if (!Files.exists(sourcePath)) {
+            throw DownloadException("File not found: $sourcePath")
+        }
+
+        Files.newInputStream(sourcePath).use { input ->
+            Files.newOutputStream(
+                destPath,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING
+            ).use { output ->
+                val buffer = ByteArray(8192)
+                var totalBytesRead = 0L
+                var bytesRead: Int
+
+                while (input.read(buffer).also { b -> bytesRead = b } != -1) {
+                    if (!coroutineContext.isActive) {
+                        throw DownloadException("Download cancelled")
+                    }
+
+                    output.write(buffer, 0, bytesRead)
+                    totalBytesRead += bytesRead
+                    progressCallback(totalBytesRead, expectedSize)
+                }
+            }
+        }
+    }
+
+    private suspend fun downloadFileFromHttp(
         url: String,
         destPath: Path,
         expectedSize: Long,
