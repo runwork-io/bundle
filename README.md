@@ -1,5 +1,7 @@
 # Bundle
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.runwork/bundle?color=blue)](https://central.sonatype.com/artifact/io.runwork/bundle)
+
 A Kotlin library for managing versioned, signed software bundles with content-addressable storage.
 
 ## Features
@@ -16,7 +18,7 @@ Add to your `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("io.runwork:bundle:0.1.0")
+    implementation("io.runwork:bundle:<version>")
 }
 ```
 
