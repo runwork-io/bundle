@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
@@ -12,7 +15,7 @@ java {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -38,7 +41,10 @@ tasks.test {
 val publishVersion: String? = providers.gradleProperty("VERSION_NAME").orNull
 
 mavenPublishing {
-    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    publishToMavenCentral(
+        host = SonatypeHost.CENTRAL_PORTAL,
+        automaticRelease = true
+    )
     signAllPublications()
 
     coordinates(
@@ -83,12 +89,16 @@ val validateVersionForPublish by tasks.registering {
         if (publishVersion == null) {
             throw GradleException(
                 "VERSION_NAME must be set when publishing to Maven Central. " +
-                "Use: ./gradlew :bundle:publishAndReleaseToMavenCentral -PVERSION_NAME=x.y.z"
+                        "Use: ./gradlew :bundle:publishAndReleaseToMavenCentral -PVERSION_NAME=x.y.z"
             )
         }
     }
 }
 
-tasks.matching { it.name.contains("MavenCentral") || it.name.startsWith("publish") || it.name.startsWith("sign") }.configureEach {
+tasks.matching {
+    it.name.contains("MavenCentral") ||
+            it.name.startsWith("publish") ||
+            it.name.startsWith("sign")
+}.configureEach {
     dependsOn(validateVersionForPublish)
 }

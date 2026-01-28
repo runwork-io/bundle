@@ -13,6 +13,7 @@ import java.io.File
 import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.system.exitProcess
 
 /**
  * CLI tool for creating signed bundles.
@@ -25,7 +26,7 @@ import java.util.zip.ZipOutputStream
 fun main(args: Array<String>) {
     val exitCode = runCli(args)
     if (exitCode != 0) {
-        System.exit(exitCode)
+        exitProcess(exitCode)
     }
 }
 
