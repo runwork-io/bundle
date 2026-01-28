@@ -39,7 +39,7 @@ object UpdateDecider {
      * @param storageManager Storage manager to check existing files
      * @return Download strategy with list of files to download
      */
-    fun decide(manifest: BundleManifest, storageManager: StorageManager): DownloadStrategy {
+    suspend fun decide(manifest: BundleManifest, storageManager: StorageManager): DownloadStrategy {
         // Find files that are not in the CAS
         val missingFiles = manifest.files.filter { file ->
             !storageManager.contentStore.contains(file.hash)

@@ -32,9 +32,6 @@ data class BundleManifest(
     /** Fully qualified main class name (e.g., "io.runwork.desktop.MainKt") */
     val mainClass: String,
 
-    /** JVM arguments to pass when launching the bundle */
-    val jvmArgs: List<String>,
-
     /** Total size of all files in bytes */
     val totalSize: Long,
 

@@ -4,12 +4,12 @@ import io.runwork.bundle.TestFixtures
 import io.runwork.bundle.manifest.BundleFile
 import io.runwork.bundle.manifest.FileType
 import io.runwork.bundle.storage.StorageManager
+import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 import java.nio.file.Path
 
 class UpdateDeciderTest {
@@ -32,7 +32,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_returnsNoDownloadNeeded_allFilesExist() {
+    fun decide_returnsNoDownloadNeeded_allFilesExist() = runTest {
         // Store files in CAS first
         val content1 = "Content 1"
         val content2 = "Content 2"
@@ -57,7 +57,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_returnsFullBundle_manySmallFilesMissing() {
+    fun decide_returnsFullBundle_manySmallFilesMissing() = runTest {
         // No files in CAS, manifest has many small files
         // Each file: 1KB, 10 files missing
         // Incremental = 10KB data + 10 * 50KB overhead = 510KB
@@ -81,7 +81,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_returnsIncremental_largeTotalSmallMissing() {
+    fun decide_returnsIncremental_largeTotalSmallMissing() = runTest {
         // For incremental to win:
         // effectiveIncremental = missingSize + numMissing * 50KB < totalSize
         //
@@ -122,7 +122,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_comparesEffectiveSize_picksSmallerOption() {
+    fun decide_comparesEffectiveSize_picksSmallerOption() = runTest {
         // Store 6 files, need 4 files
         // Each existing file: 500KB, each missing: 500KB
         // Total = 10 * 500KB = 5MB
@@ -165,7 +165,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_incrementalStrategy_listsOnlyMissingFiles() {
+    fun decide_incrementalStrategy_listsOnlyMissingFiles() = runTest {
         // Store large existing files so incremental wins
         // 3 existing files at 1MB each = 3MB
         // 1 missing file at 100KB
@@ -196,7 +196,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_fullBundleStrategy_hasCorrectTotalSize() {
+    fun decide_fullBundleStrategy_hasCorrectTotalSize() = runTest {
         // All small files missing - overhead makes full bundle better
         // 3 files at 1KB each = 3KB total
         // Incremental = 3KB + 3 * 50KB = 153KB
@@ -218,7 +218,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_emptyManifest_returnsNoDownloadNeeded() {
+    fun decide_emptyManifest_returnsNoDownloadNeeded() = runTest {
         val manifest = TestFixtures.createTestManifest(files = emptyList())
 
         val strategy = UpdateDecider.decide(manifest, storageManager)
@@ -227,7 +227,7 @@ class UpdateDeciderTest {
     }
 
     @Test
-    fun decide_incrementalStrategy_hasCorrectTotalSize() {
+    fun decide_incrementalStrategy_hasCorrectTotalSize() = runTest {
         // Store large existing files so incremental wins
         // 5 existing files at 1MB = 5MB
         // 1 missing file at 100KB

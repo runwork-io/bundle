@@ -126,7 +126,6 @@ class ManifestSignerTest {
         assertEquals(manifest.minimumShellVersion, signedManifest.minimumShellVersion)
         assertEquals(manifest.files, signedManifest.files)
         assertEquals(manifest.mainClass, signedManifest.mainClass)
-        assertEquals(manifest.jvmArgs, signedManifest.jvmArgs)
         assertEquals(manifest.totalSize, signedManifest.totalSize)
         assertEquals(manifest.bundleHash, signedManifest.bundleHash)
         // Only signature should be different

@@ -1,8 +1,14 @@
 package io.runwork.bundle.verification
 
-import java.nio.file.Files
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okio.ByteString.Companion.toByteString
+import okio.FileSystem
+import okio.HashingSource
+import okio.Path.Companion.toOkioPath
+import okio.blackholeSink
+import okio.buffer
 import java.nio.file.Path
-import java.security.MessageDigest
 
 /**
  * Utility for computing and verifying SHA-256 hashes.
@@ -15,16 +21,11 @@ object HashVerifier {
      * @param path Path to the file
      * @return SHA-256 hash prefixed with "sha256:"
      */
-    fun computeHash(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
-            }
+    suspend fun computeHash(path: Path): String = withContext(Dispatchers.IO) {
+        HashingSource.sha256(FileSystem.SYSTEM.source(path.toOkioPath())).use { hashingSource ->
+            hashingSource.buffer().readAll(blackholeSink())
+            "sha256:" + hashingSource.hash.hex()
         }
-        return "sha256:" + digest.digest().toHexString()
     }
 
     /**
@@ -34,9 +35,7 @@ object HashVerifier {
      * @return SHA-256 hash prefixed with "sha256:"
      */
     fun computeHash(data: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(data)
-        return "sha256:" + digest.digest().toHexString()
+        return "sha256:" + data.toByteString().sha256().hex()
     }
 
     /**
@@ -46,8 +45,8 @@ object HashVerifier {
      * @param expectedHash Expected SHA-256 hash (with or without "sha256:" prefix)
      * @return true if the hash matches, false otherwise
      */
-    fun verify(path: Path, expectedHash: String): Boolean {
-        if (!Files.exists(path)) return false
+    suspend fun verify(path: Path, expectedHash: String): Boolean {
+        if (!withContext(Dispatchers.IO) { java.nio.file.Files.exists(path) }) return false
         val actualHash = computeHash(path)
         return normalizeHash(actualHash) == normalizeHash(expectedHash)
     }
@@ -57,9 +56,5 @@ object HashVerifier {
      */
     private fun normalizeHash(hash: String): String {
         return if (hash.startsWith("sha256:")) hash else "sha256:$hash"
-    }
-
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
     }
 }
