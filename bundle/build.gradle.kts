@@ -74,9 +74,9 @@ publishing {
 }
 
 signing {
-    val signingKeyId = findProperty("signing.keyId")?.toString() ?: System.getenv("SIGNING_KEY_ID")
-    val signingKey = findProperty("signing.key")?.toString() ?: System.getenv("SIGNING_KEY")
-    val signingPassword = findProperty("signing.password")?.toString() ?: System.getenv("SIGNING_PASSWORD")
+    val signingKeyId = providers.environmentVariable("RUNWORK_SIGNING_KEY_ID").orNull
+    val signingKey = providers.environmentVariable("RUNWORK_SIGNING_KEY").orNull
+    val signingPassword = providers.environmentVariable("RUNWORK_SIGNING_PASSWORD").orNull
 
     if (signingKeyId != null && signingKey != null && signingPassword != null) {
         useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)

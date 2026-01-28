@@ -19,8 +19,8 @@ subprojects {
                     url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
 
                     credentials {
-                        username = findProperty("ossrhUsername")?.toString() ?: System.getenv("OSSRH_USERNAME")
-                        password = findProperty("ossrhPassword")?.toString() ?: System.getenv("OSSRH_PASSWORD")
+                        username = providers.environmentVariable("SONATYPE_USER").orNull
+                        password = providers.environmentVariable("SONATYPE_PASSWORD").orNull
                     }
                 }
             }
