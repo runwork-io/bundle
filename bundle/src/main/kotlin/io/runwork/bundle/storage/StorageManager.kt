@@ -239,7 +239,7 @@ class StorageManager(
         if (casFiles.isEmpty()) return
 
         // Collect file keys (inodes) from version directories
-        val referencedKeys = mutableSetOf<Any?>()
+        val referencedKeys = mutableSetOf<Any>()
 
         for (version in listVersions()) {
             val versionDir = versionsDir.resolve(version.toString())
@@ -270,9 +270,11 @@ class StorageManager(
      * Get a unique file key (typically inode on Unix, file key on Windows).
      * This allows efficient comparison of hard links without computing hashes.
      */
-    private fun getFileKey(path: Path): Any? {
+    private fun getFileKey(path: Path): Any {
         return try {
+            // On Windows, fileKey() returns null, so we need to fall back to hash
             Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes::class.java).fileKey()
+                ?: contentStore.computeHash(path)
         } catch (e: Exception) {
             // Fallback: use the hash if we can't get the file key
             contentStore.computeHash(path)
