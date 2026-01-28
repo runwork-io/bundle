@@ -4,9 +4,15 @@ import io.runwork.bundle.manifest.BundleFile
 import io.runwork.bundle.manifest.BundleManifest
 import io.runwork.bundle.manifest.FileType
 import io.runwork.bundle.manifest.ManifestSigner
+import io.runwork.bundle.verification.HashVerifier
 import io.runwork.bundle.verification.SignatureVerifier
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okio.ByteString.Companion.toByteString
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /**
  * Test utilities for bundle tests.
@@ -102,12 +108,17 @@ object TestFixtures {
     }
 
     /**
-     * Compute SHA-256 hash of content.
+     * Compute SHA-256 hash of content using Okio.
      */
     fun computeHash(content: ByteArray): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        val hashBytes = digest.digest(content)
-        return "sha256:" + hashBytes.joinToString("") { "%02x".format(it) }
+        return "sha256:" + content.toByteString().sha256().hex()
+    }
+
+    /**
+     * Compute SHA-256 hash of a file using Okio (streaming, memory-efficient).
+     */
+    suspend fun computeHash(path: Path): String {
+        return HashVerifier.computeHash(path)
     }
 
     /**
@@ -118,6 +129,171 @@ object TestFixtures {
             Files.walk(path)
                 .sorted(Comparator.reverseOrder())
                 .forEach { Files.delete(it) }
+        }
+    }
+
+    private val json = Json { prettyPrint = true }
+
+    /**
+     * Create a file-based bundle server directory structure for testing file:// URLs.
+     *
+     * Creates the following structure:
+     * ```
+     * baseDir/
+     *   manifest.json           # Bundle manifest JSON
+     *   bundle.zip              # Full bundle ZIP (optional)
+     *   files/
+     *     <hash1>               # Individual files by hash (no sha256: prefix)
+     *     <hash2>
+     * ```
+     *
+     * @param baseDir The directory to create the bundle server in
+     * @param manifest The bundle manifest to write
+     * @param files Map of hash (with sha256: prefix) to file contents
+     * @param includeZip If true, also creates bundle.zip with all files
+     * @return file:// URL pointing to the bundle server
+     */
+    fun createFileBundleServer(
+        baseDir: Path,
+        manifest: BundleManifest,
+        files: Map<String, ByteArray>,
+        includeZip: Boolean = false
+    ): String {
+        // Create directories
+        val filesDir = baseDir.resolve("files")
+        Files.createDirectories(filesDir)
+
+        // Write manifest.json
+        val manifestPath = baseDir.resolve("manifest.json")
+        Files.writeString(manifestPath, json.encodeToString(manifest))
+
+        // Write individual files by hash (without sha256: prefix)
+        for ((hash, content) in files) {
+            val hashWithoutPrefix = hash.removePrefix("sha256:")
+            val filePath = filesDir.resolve(hashWithoutPrefix)
+            Files.write(filePath, content)
+        }
+
+        // Optionally create bundle.zip
+        if (includeZip) {
+            val zipPath = baseDir.resolve("bundle.zip")
+            createBundleZip(zipPath, manifest, files)
+        }
+
+        return baseDir.toUri().toString().trimEnd('/')
+    }
+
+    /**
+     * Create a bundle.zip file containing the manifest files.
+     *
+     * Streams directly to file (memory-efficient for large bundles).
+     */
+    private fun createBundleZip(
+        zipPath: Path,
+        manifest: BundleManifest,
+        files: Map<String, ByteArray>
+    ) {
+        // Stream directly to the ZIP file instead of buffering in memory
+        Files.newOutputStream(zipPath).use { fos ->
+            ZipOutputStream(fos).use { zos ->
+                for (bundleFile in manifest.files) {
+                    val content = files[bundleFile.hash]
+                    if (content != null) {
+                        zos.putNextEntry(ZipEntry(bundleFile.path))
+                        zos.write(content)
+                        zos.closeEntry()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Content provider for file data - allows both in-memory and file-backed content.
+     *
+     * This interface enables memory-efficient handling of large files by allowing
+     * content to be streamed from disk rather than held entirely in memory.
+     */
+    sealed interface FileContent {
+        /** In-memory byte array content */
+        data class Bytes(val data: ByteArray) : FileContent {
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Bytes) return false
+                return data.contentEquals(other.data)
+            }
+
+            override fun hashCode(): Int = data.contentHashCode()
+        }
+
+        /** File-backed content (memory-efficient for large files) */
+        data class File(val path: Path) : FileContent
+    }
+
+    /**
+     * Create a file-based bundle server with file-backed content (memory-efficient).
+     *
+     * This overload accepts FileContent which can be either in-memory bytes or
+     * file paths, allowing large files to be streamed without loading into memory.
+     */
+    fun createFileBundleServerStreaming(
+        baseDir: Path,
+        manifest: BundleManifest,
+        files: Map<String, FileContent>,
+        includeZip: Boolean = false
+    ): String {
+        val filesDir = baseDir.resolve("files")
+        Files.createDirectories(filesDir)
+
+        // Write manifest.json
+        val manifestPath = baseDir.resolve("manifest.json")
+        Files.writeString(manifestPath, json.encodeToString(manifest))
+
+        // Write individual files by hash (without sha256: prefix)
+        for ((hash, content) in files) {
+            val hashWithoutPrefix = hash.removePrefix("sha256:")
+            val filePath = filesDir.resolve(hashWithoutPrefix)
+            when (content) {
+                is FileContent.Bytes -> Files.write(filePath, content.data)
+                is FileContent.File -> Files.copy(content.path, filePath)
+            }
+        }
+
+        // Optionally create bundle.zip
+        if (includeZip) {
+            val zipPath = baseDir.resolve("bundle.zip")
+            createBundleZipStreaming(zipPath, manifest, files)
+        }
+
+        return baseDir.toUri().toString().trimEnd('/')
+    }
+
+    /**
+     * Create a bundle.zip file with streaming support for file-backed content.
+     */
+    private fun createBundleZipStreaming(
+        zipPath: Path,
+        manifest: BundleManifest,
+        files: Map<String, FileContent>
+    ) {
+        Files.newOutputStream(zipPath).use { fos ->
+            ZipOutputStream(fos).use { zos ->
+                for (bundleFile in manifest.files) {
+                    val content = files[bundleFile.hash] ?: continue
+
+                    zos.putNextEntry(ZipEntry(bundleFile.path))
+                    when (content) {
+                        is FileContent.Bytes -> zos.write(content.data)
+                        is FileContent.File -> {
+                            // Stream file content directly from file
+                            Files.newInputStream(content.path).use { input ->
+                                input.copyTo(zos)
+                            }
+                        }
+                    }
+                    zos.closeEntry()
+                }
+            }
         }
     }
 }

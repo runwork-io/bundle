@@ -366,4 +366,198 @@ class DownloadManagerTest {
         }
         return baos.toByteArray()
     }
+
+    // ====== file:// URL Tests ======
+
+    @Test
+    fun fetchManifest_worksWithFileUrl() = runTest {
+        val fileBundleDir = tempDir.resolve("file-bundle-server")
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    size = 1000,
+                    type = FileType.JAR
+                )
+            ),
+            buildNumber = 42,
+            platform = "macos-arm64"
+        )
+
+        val baseUrl = TestFixtures.createFileBundleServer(
+            baseDir = fileBundleDir,
+            manifest = manifest,
+            files = mapOf()
+        )
+
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        val result = fileDownloadManager.fetchManifest()
+
+        assertEquals(42, result.buildNumber)
+        assertEquals("macos-arm64", result.platform)
+        assertEquals(1, result.files.size)
+        assertEquals("app.jar", result.files[0].path)
+    }
+
+    @Test
+    fun fetchManifest_fileUrl_throwsForMissingFile() = runTest {
+        val fileBundleDir = tempDir.resolve("missing-file-bundle-server")
+        java.nio.file.Files.createDirectories(fileBundleDir)
+
+        val baseUrl = fileBundleDir.toUri().toString().trimEnd('/')
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        assertFailsWith<DownloadException> {
+            fileDownloadManager.fetchManifest()
+        }
+    }
+
+    @Test
+    fun downloadBundle_incrementalWithFileUrl() = runTest {
+        val fileBundleDir = tempDir.resolve("incremental-file-bundle")
+
+        // Create content and compute hash
+        val content = "A".repeat(100_000) // 100KB
+        val hash = TestFixtures.computeHash(content.toByteArray())
+
+        // Store large existing files to ensure incremental strategy is chosen
+        val existingContent = "B".repeat(1_000_000) // 1MB each
+        val existingHash = TestFixtures.computeHash(existingContent.toByteArray())
+        repeat(5) {
+            val tempFile = TestFixtures.createTestFile(tempDir, "temp$it.txt", existingContent)
+            storageManager.contentStore.store(tempFile)
+        }
+
+        val existingFiles = (1..5).map { i ->
+            BundleFile(
+                path = "existing$i.txt",
+                hash = existingHash,
+                size = existingContent.length.toLong(),
+                type = FileType.RESOURCE
+            )
+        }
+
+        val newFile = BundleFile(
+            path = "new.txt",
+            hash = hash,
+            size = content.length.toLong(),
+            type = FileType.RESOURCE
+        )
+
+        val manifest = TestFixtures.createTestManifest(
+            files = existingFiles + newFile,
+            buildNumber = 42
+        )
+
+        val baseUrl = TestFixtures.createFileBundleServer(
+            baseDir = fileBundleDir,
+            manifest = manifest,
+            files = mapOf(hash to content.toByteArray())
+        )
+
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        val progressUpdates = mutableListOf<DownloadProgress>()
+        val result = fileDownloadManager.downloadBundle(manifest) { progress ->
+            progressUpdates.add(progress)
+        }
+
+        assertIs<DownloadResult.Success>(result)
+        assertEquals(42, result.buildNumber)
+
+        // Verify file was downloaded and stored
+        assertTrue(storageManager.contentStore.contains(hash))
+
+        // Verify progress was reported
+        assertTrue(progressUpdates.isNotEmpty())
+    }
+
+    @Test
+    fun downloadBundle_fullZipWithFileUrl() = runTest {
+        val fileBundleDir = tempDir.resolve("fullzip-file-bundle")
+
+        // Create files and their hashes
+        val file1Content = "File 1 content"
+        val file1Hash = TestFixtures.computeHash(file1Content.toByteArray())
+
+        val file2Content = "File 2 content"
+        val file2Hash = TestFixtures.computeHash(file2Content.toByteArray())
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "file1.txt",
+                    hash = file1Hash,
+                    size = file1Content.length.toLong(),
+                    type = FileType.RESOURCE
+                ),
+                BundleFile(
+                    path = "file2.txt",
+                    hash = file2Hash,
+                    size = file2Content.length.toLong(),
+                    type = FileType.RESOURCE
+                )
+            ),
+            buildNumber = 42
+        )
+
+        val baseUrl = TestFixtures.createFileBundleServer(
+            baseDir = fileBundleDir,
+            manifest = manifest,
+            files = mapOf(
+                file1Hash to file1Content.toByteArray(),
+                file2Hash to file2Content.toByteArray()
+            ),
+            includeZip = true
+        )
+
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        val progressUpdates = mutableListOf<DownloadProgress>()
+        val result = fileDownloadManager.downloadBundle(manifest) { progress ->
+            progressUpdates.add(progress)
+        }
+
+        assertIs<DownloadResult.Success>(result)
+
+        // Verify files were stored
+        assertTrue(storageManager.contentStore.contains(file1Hash))
+        assertTrue(storageManager.contentStore.contains(file2Hash))
+    }
+
+    @Test
+    fun downloadBundle_fileUrl_fileNotFound() = runTest {
+        val fileBundleDir = tempDir.resolve("missing-files-bundle")
+
+        val content = "Some content"
+        val hash = TestFixtures.computeHash(content.toByteArray())
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "file.txt",
+                    hash = hash,
+                    size = content.length.toLong(),
+                    type = FileType.RESOURCE
+                )
+            ),
+            buildNumber = 42
+        )
+
+        // Create bundle server WITHOUT the actual file content
+        val baseUrl = TestFixtures.createFileBundleServer(
+            baseDir = fileBundleDir,
+            manifest = manifest,
+            files = mapOf() // Empty - no files
+        )
+
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        val result = fileDownloadManager.downloadBundle(manifest) {}
+
+        assertIs<DownloadResult.Failure>(result)
+        assertTrue(result.error.contains("not found", ignoreCase = true))
+    }
 }
