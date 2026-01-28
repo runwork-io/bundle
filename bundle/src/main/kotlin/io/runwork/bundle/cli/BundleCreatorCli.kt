@@ -73,7 +73,6 @@ private fun printUsage() {
             --private-key-path <path> Path to file containing Base64-encoded private key
             --build-number <num>    Optional build number (defaults to current timestamp)
             --main-class <class>    Main class name (defaults to io.runwork.desktop.MainKt)
-            --jvm-args <args>       JVM arguments (comma-separated, defaults to -Xms512m,-Xmx2g)
 
           Generate keys:
             --generate-keys         Generate a new Ed25519 key pair and print to stdout
@@ -91,7 +90,6 @@ private sealed class CliConfig {
         val privateKeyBase64: String,
         val buildNumber: Long?,
         val mainClass: String,
-        val jvmArgs: List<String>,
     ) : CliConfig()
 }
 
@@ -107,7 +105,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
     var privateKeyPath: String? = null
     var buildNumber: Long? = null
     var mainClass = "io.runwork.desktop.MainKt"
-    var jvmArgs = listOf("-Xms512m", "-Xmx2g")
 
     var i = 0
     while (i < args.size) {
@@ -139,12 +136,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
 
             "--main-class" -> {
                 mainClass = args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --main-class")
-            }
-
-            "--jvm-args" -> {
-                jvmArgs = (args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --jvm-args"))
-                    .split(",")
-                    .map { it.trim() }
             }
 
             else -> {
@@ -181,7 +172,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
         privateKeyBase64 = privateKeyBase64,
         buildNumber = buildNumber,
         mainClass = mainClass,
-        jvmArgs = jvmArgs,
     )
 }
 
@@ -267,7 +257,6 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
             minimumShellVersion = 1,
             files = bundleFiles,
             mainClass = config.mainClass,
-            jvmArgs = config.jvmArgs,
             totalSize = bundleFiles.sumOf { it.size },
             bundleHash = bundleHash,
             signature = ""

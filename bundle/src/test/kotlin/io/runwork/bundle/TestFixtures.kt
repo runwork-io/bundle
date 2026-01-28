@@ -54,7 +54,6 @@ object TestFixtures {
             minimumShellVersion = 1,
             files = files,
             mainClass = mainClass,
-            jvmArgs = listOf("-Xms256m"),
             totalSize = files.sumOf { it.size },
             bundleHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
             signature = ""

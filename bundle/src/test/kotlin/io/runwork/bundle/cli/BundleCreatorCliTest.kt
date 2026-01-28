@@ -256,25 +256,6 @@ class BundleCreatorCliTest {
     }
 
     @Test
-    fun createBundle_usesCustomJvmArgs() {
-        File(inputDir, "test.jar").writeText("JAR")
-
-        main(arrayOf(
-            "--input", inputDir.absolutePath,
-            "--output", outputDir.absolutePath,
-            "--platform", "macos-arm64",
-            "--private-key-path", privateKeyFile.absolutePath,
-            "--jvm-args", "-Xms1g,-Xmx4g,-XX:+UseG1GC"
-        ))
-
-        val manifest = json.decodeFromString<BundleManifest>(
-            File(outputDir, "manifest.json").readText()
-        )
-
-        assertEquals(listOf("-Xms1g", "-Xmx4g", "-XX:+UseG1GC"), manifest.jvmArgs)
-    }
-
-    @Test
     fun createBundle_usesBuildNumber() {
         File(inputDir, "test.txt").writeText("Content")
 
