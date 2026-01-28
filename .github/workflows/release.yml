@@ -36,7 +36,7 @@ jobs:
           fi
 
       - name: Run tests
-        run: ./gradlew :bundle:test -PVERSION_NAME="${{ steps.version.outputs.version }}"
+        run: ./gradlew :bundle:test
 
       - name: Publish to Maven Central
         run: ./gradlew :bundle:publishAndReleaseToMavenCentral -PVERSION_NAME="${{ steps.version.outputs.version }}"

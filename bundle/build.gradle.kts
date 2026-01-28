@@ -89,6 +89,6 @@ val validateVersionForPublish by tasks.registering {
     }
 }
 
-tasks.matching { it.name.contains("MavenCentral") || it.name == "signMavenPublication" }.configureEach {
+tasks.matching { it.name.contains("MavenCentral") || it.name.startsWith("publish") || it.name.startsWith("sign") }.configureEach {
     dependsOn(validateVersionForPublish)
 }
