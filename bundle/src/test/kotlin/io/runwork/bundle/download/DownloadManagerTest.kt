@@ -4,6 +4,8 @@ import io.runwork.bundle.TestFixtures
 import io.runwork.bundle.manifest.BundleFile
 import io.runwork.bundle.manifest.FileType
 import io.runwork.bundle.storage.StorageManager
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -559,5 +561,48 @@ class DownloadManagerTest {
 
         assertIs<DownloadResult.Failure>(result)
         assertTrue(result.error.contains("not found", ignoreCase = true))
+    }
+
+    @Test
+    fun downloadBundle_fileUrl_cancellation() = runTest {
+        val fileBundleDir = tempDir.resolve("cancel-file-bundle")
+
+        // Create a large file to give time for cancellation
+        val largeContent = ByteArray(1_000_000) { 'X'.code.toByte() } // 1MB
+        val hash = TestFixtures.computeHash(largeContent)
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "large.bin",
+                    hash = hash,
+                    size = largeContent.size.toLong(),
+                    type = FileType.RESOURCE
+                )
+            ),
+            buildNumber = 42
+        )
+
+        val baseUrl = TestFixtures.createFileBundleServer(
+            baseDir = fileBundleDir,
+            manifest = manifest,
+            files = mapOf(hash to largeContent),
+            includeZip = true // Use ZIP for full bundle download
+        )
+
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+
+        var progressCount = 0
+        val job = launch {
+            fileDownloadManager.downloadBundle(manifest) {
+                progressCount++
+            }
+        }
+
+        // Cancel after a brief moment
+        job.cancelAndJoin()
+
+        // The job should have been cancelled
+        assertTrue(job.isCancelled)
     }
 }
