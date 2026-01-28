@@ -1,10 +1,12 @@
 package io.runwork.bundle.storage
 
+import io.runwork.bundle.verification.HashVerifier
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.security.MessageDigest
 
 /**
  * Content-addressable storage for bundle files.
@@ -17,7 +19,10 @@ import java.security.MessageDigest
 class ContentAddressableStore(
     private val storeDir: Path
 ) {
-    init {
+    /**
+     * Ensure the store directory exists.
+     */
+    private suspend fun ensureDirectoryExists() = withContext(Dispatchers.IO) {
         Files.createDirectories(storeDir)
     }
 
@@ -26,9 +31,9 @@ class ContentAddressableStore(
      *
      * @param hash SHA-256 hash prefixed with "sha256:" or just the hex string
      */
-    fun contains(hash: String): Boolean {
+    suspend fun contains(hash: String): Boolean = withContext(Dispatchers.IO) {
         val fileName = hash.removePrefix("sha256:")
-        return Files.exists(storeDir.resolve(fileName))
+        Files.exists(storeDir.resolve(fileName))
     }
 
     /**
@@ -36,10 +41,10 @@ class ContentAddressableStore(
      *
      * @param hash SHA-256 hash prefixed with "sha256:" or just the hex string
      */
-    fun getPath(hash: String): Path? {
+    suspend fun getPath(hash: String): Path? = withContext(Dispatchers.IO) {
         val fileName = hash.removePrefix("sha256:")
         val path = storeDir.resolve(fileName)
-        return if (Files.exists(path)) path else null
+        if (Files.exists(path)) path else null
     }
 
     /**
@@ -51,16 +56,19 @@ class ContentAddressableStore(
      * @param tempFile Path to the temporary file to store
      * @return The SHA-256 hash of the file (prefixed with "sha256:")
      */
-    fun store(tempFile: Path): String {
+    suspend fun store(tempFile: Path): String {
+        ensureDirectoryExists()
         val hash = computeHash(tempFile)
         val fileName = hash.removePrefix("sha256:")
         val destPath = storeDir.resolve(fileName)
 
-        if (!Files.exists(destPath)) {
-            moveFile(tempFile, destPath)
-        } else {
-            // File already exists with this hash, delete the duplicate
-            Files.delete(tempFile)
+        withContext(Dispatchers.IO) {
+            if (!Files.exists(destPath)) {
+                moveFile(tempFile, destPath)
+            } else {
+                // File already exists with this hash, delete the duplicate
+                Files.delete(tempFile)
+            }
         }
 
         return hash
@@ -68,6 +76,8 @@ class ContentAddressableStore(
 
     /**
      * Move a file with atomic move, falling back to copy-then-delete if not supported.
+     *
+     * Note: This function performs I/O and must be called from within a Dispatchers.IO context.
      */
     private fun moveFile(source: Path, dest: Path) {
         try {
@@ -88,20 +98,23 @@ class ContentAddressableStore(
      * @param expectedHash The expected SHA-256 hash (prefixed with "sha256:")
      * @return true if the hash matched and file was stored, false if hash mismatch
      */
-    fun storeWithHash(tempFile: Path, expectedHash: String): Boolean {
+    suspend fun storeWithHash(tempFile: Path, expectedHash: String): Boolean {
+        ensureDirectoryExists()
         val actualHash = computeHash(tempFile)
         if (actualHash != expectedHash) {
-            Files.delete(tempFile)
+            withContext(Dispatchers.IO) { Files.delete(tempFile) }
             return false
         }
 
         val fileName = expectedHash.removePrefix("sha256:")
         val destPath = storeDir.resolve(fileName)
 
-        if (!Files.exists(destPath)) {
-            moveFile(tempFile, destPath)
-        } else {
-            Files.delete(tempFile)
+        withContext(Dispatchers.IO) {
+            if (!Files.exists(destPath)) {
+                moveFile(tempFile, destPath)
+            } else {
+                Files.delete(tempFile)
+            }
         }
 
         return true
@@ -113,7 +126,7 @@ class ContentAddressableStore(
      * @param hash The expected SHA-256 hash (prefixed with "sha256:")
      * @return true if the file exists and hash matches, false otherwise
      */
-    fun verify(hash: String): Boolean {
+    suspend fun verify(hash: String): Boolean {
         val path = getPath(hash) ?: return false
         val actualHash = computeHash(path)
         return actualHash == hash
@@ -125,19 +138,19 @@ class ContentAddressableStore(
      * @param hash SHA-256 hash of the file to delete
      * @return true if the file was deleted, false if it didn't exist
      */
-    fun delete(hash: String): Boolean {
+    suspend fun delete(hash: String): Boolean = withContext(Dispatchers.IO) {
         val fileName = hash.removePrefix("sha256:")
         val path = storeDir.resolve(fileName)
-        return Files.deleteIfExists(path)
+        Files.deleteIfExists(path)
     }
 
     /**
      * List all file hashes in the store.
      */
-    fun listHashes(): List<String> {
-        if (!Files.exists(storeDir)) return emptyList()
+    suspend fun listHashes(): List<String> = withContext(Dispatchers.IO) {
+        if (!Files.exists(storeDir)) return@withContext emptyList()
 
-        return Files.list(storeDir).use { stream ->
+        Files.list(storeDir).use { stream ->
             stream
                 .filter { Files.isRegularFile(it) }
                 .map { "sha256:${it.fileName}" }
@@ -151,19 +164,5 @@ class ContentAddressableStore(
      * @param path Path to the file
      * @return SHA-256 hash prefixed with "sha256:"
      */
-    fun computeHash(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
-            }
-        }
-        return "sha256:" + digest.digest().toHexString()
-    }
-
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02x".format(it) }
-    }
+    suspend fun computeHash(path: Path): String = HashVerifier.computeHash(path)
 }

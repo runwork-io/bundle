@@ -1,6 +1,7 @@
 package io.runwork.bundle.storage
 
 import io.runwork.bundle.TestFixtures
+import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -29,7 +30,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun store_returnsCorrectHash() {
+    fun store_returnsCorrectHash() = runTest {
         val content = "Test content for hashing"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
 
@@ -45,7 +46,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun store_deduplicatesIdenticalFiles() {
+    fun store_deduplicatesIdenticalFiles() = runTest {
         val content = "Duplicate content"
         val tempFile1 = TestFixtures.createTestFile(tempDir, "temp1.txt", content)
         val tempFile2 = TestFixtures.createTestFile(tempDir, "temp2.txt", content)
@@ -65,7 +66,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun contains_returnsTrueForStoredFile() {
+    fun contains_returnsTrueForStoredFile() = runTest {
         val content = "Content to store"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
         val hash = store.store(tempFile)
@@ -76,14 +77,14 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun contains_returnsFalseForMissingFile() {
+    fun contains_returnsFalseForMissingFile() = runTest {
         val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
         assertFalse(store.contains(unknownHash))
     }
 
     @Test
-    fun getPath_returnsPathForStoredFile() {
+    fun getPath_returnsPathForStoredFile() = runTest {
         val content = "Content for path lookup"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
         val hash = store.store(tempFile)
@@ -96,7 +97,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun getPath_returnsNullForMissingFile() {
+    fun getPath_returnsNullForMissingFile() = runTest {
         val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
         val path = store.getPath(unknownHash)
@@ -105,7 +106,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun verify_returnsTrueForValidFile() {
+    fun verify_returnsTrueForValidFile() = runTest {
         val content = "Content to verify"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
         val hash = store.store(tempFile)
@@ -114,7 +115,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun verify_returnsFalseForCorruptedFile() {
+    fun verify_returnsFalseForCorruptedFile() = runTest {
         val content = "Original content"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
         val hash = store.store(tempFile)
@@ -127,7 +128,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun delete_removesFile() {
+    fun delete_removesFile() = runTest {
         val content = "Content to delete"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
         val hash = store.store(tempFile)
@@ -142,7 +143,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun delete_returnsFalseForMissingFile() {
+    fun delete_returnsFalseForMissingFile() = runTest {
         val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
         val deleted = store.delete(unknownHash)
@@ -151,7 +152,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun listHashes_returnsAllStoredHashes() {
+    fun listHashes_returnsAllStoredHashes() = runTest {
         val content1 = "First content"
         val content2 = "Second content"
         val content3 = "Third content"
@@ -173,14 +174,14 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun listHashes_returnsEmptyForEmptyStore() {
+    fun listHashes_returnsEmptyForEmptyStore() = runTest {
         val hashes = store.listHashes()
 
         assertTrue(hashes.isEmpty())
     }
 
     @Test
-    fun storeWithHash_acceptsMatchingHash() {
+    fun storeWithHash_acceptsMatchingHash() = runTest {
         val content = "Content with known hash"
         val expectedHash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -194,7 +195,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun storeWithHash_rejectsWrongHash() {
+    fun storeWithHash_rejectsWrongHash() = runTest {
         val content = "Content with wrong hash"
         val wrongHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -208,7 +209,7 @@ class ContentAddressableStoreTest {
     }
 
     @Test
-    fun storeWithHash_deduplicatesExistingFile() {
+    fun storeWithHash_deduplicatesExistingFile() = runTest {
         val content = "Deduplicated content"
         val hash = TestFixtures.computeHash(content.toByteArray())
 

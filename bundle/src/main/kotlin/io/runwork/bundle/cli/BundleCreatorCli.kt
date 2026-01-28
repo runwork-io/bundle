@@ -6,11 +6,10 @@ import io.runwork.bundle.manifest.FileType
 import io.runwork.bundle.manifest.ManifestSigner
 import io.runwork.bundle.storage.PlatformPaths
 import io.runwork.bundle.verification.HashVerifier
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -52,7 +51,7 @@ fun runCli(args: Array<String>): Int {
             }
 
             is CliConfig.CreateBundle -> {
-                BundleCreator(config).create()
+                runBlocking { BundleCreator(config).create() }
             }
         }
         0 // Success
@@ -74,7 +73,6 @@ private fun printUsage() {
             --private-key-path <path> Path to file containing Base64-encoded private key
             --build-number <num>    Optional build number (defaults to current timestamp)
             --main-class <class>    Main class name (defaults to io.runwork.desktop.MainKt)
-            --jvm-args <args>       JVM arguments (comma-separated, defaults to -Xms512m,-Xmx2g)
 
           Generate keys:
             --generate-keys         Generate a new Ed25519 key pair and print to stdout
@@ -92,7 +90,6 @@ private sealed class CliConfig {
         val privateKeyBase64: String,
         val buildNumber: Long?,
         val mainClass: String,
-        val jvmArgs: List<String>,
     ) : CliConfig()
 }
 
@@ -108,7 +105,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
     var privateKeyPath: String? = null
     var buildNumber: Long? = null
     var mainClass = "io.runwork.desktop.MainKt"
-    var jvmArgs = listOf("-Xms512m", "-Xmx2g")
 
     var i = 0
     while (i < args.size) {
@@ -140,12 +136,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
 
             "--main-class" -> {
                 mainClass = args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --main-class")
-            }
-
-            "--jvm-args" -> {
-                jvmArgs = (args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --jvm-args"))
-                    .split(",")
-                    .map { it.trim() }
             }
 
             else -> {
@@ -182,7 +172,6 @@ private fun parseArgs(args: Array<String>): CliConfig {
         privateKeyBase64 = privateKeyBase64,
         buildNumber = buildNumber,
         mainClass = mainClass,
-        jvmArgs = jvmArgs,
     )
 }
 
@@ -211,7 +200,7 @@ private val prettyJson = Json { prettyPrint = true }
  */
 private class BundleCreator(private val config: CliConfig.CreateBundle) {
 
-    fun create() {
+    suspend fun create() {
         // 1. Validate input
         require(config.inputDir.exists()) { "Input directory does not exist: ${config.inputDir}" }
 
@@ -268,7 +257,6 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
             minimumShellVersion = 1,
             files = bundleFiles,
             mainClass = config.mainClass,
-            jvmArgs = config.jvmArgs,
             totalSize = bundleFiles.sumOf { it.size },
             bundleHash = bundleHash,
             signature = ""
