@@ -36,10 +36,10 @@ jobs:
           fi
 
       - name: Run tests
-        run: ./gradlew test -PVERSION_NAME=${{ steps.version.outputs.version }}
+        run: ./gradlew :bundle:test -PVERSION_NAME=${{ steps.version.outputs.version }}
 
       - name: Publish to Maven Central
-        run: ./gradlew publish -PVERSION_NAME=${{ steps.version.outputs.version }}
+        run: ./gradlew :bundle:publish -PVERSION_NAME=${{ steps.version.outputs.version }}
         env:
           SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
