@@ -1,13 +1,13 @@
 package io.runwork.bundle.verification
 
 import io.runwork.bundle.TestFixtures
+import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import java.nio.file.Files
 import java.nio.file.Path
 
 class HashVerifierTest {
@@ -25,7 +25,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun computeHash_file_returnsCorrectHash() {
+    fun computeHash_file_returnsCorrectHash() = runTest {
         // Known content with known hash
         val content = "Hello, World!"
         val file = TestFixtures.createTestFile(tempDir, "test.txt", content)
@@ -46,7 +46,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun verify_returnsTrueForMatchingHash() {
+    fun verify_returnsTrueForMatchingHash() = runTest {
         val content = "Test content for verification"
         val file = TestFixtures.createTestFile(tempDir, "verify.txt", content)
         val expectedHash = HashVerifier.computeHash(file)
@@ -57,7 +57,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun verify_returnsTrueForHashWithoutPrefix() {
+    fun verify_returnsTrueForHashWithoutPrefix() = runTest {
         val content = "Test content"
         val file = TestFixtures.createTestFile(tempDir, "verify.txt", content)
         val expectedHash = HashVerifier.computeHash(file)
@@ -69,7 +69,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun verify_returnsFalseForMismatchedHash() {
+    fun verify_returnsFalseForMismatchedHash() = runTest {
         val file = TestFixtures.createTestFile(tempDir, "verify.txt", "Original content")
         val wrongHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -79,7 +79,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun verify_returnsFalseForMissingFile() {
+    fun verify_returnsFalseForMissingFile() = runTest {
         val nonExistentFile = tempDir.resolve("does-not-exist.txt")
         val someHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -89,7 +89,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun computeHash_largeFile_streamsCorrectly() {
+    fun computeHash_largeFile_streamsCorrectly() = runTest {
         // Create a file larger than the buffer size (8KB)
         val content = ByteArray(100_000) { it.toByte() }
         val file = TestFixtures.createTestFile(tempDir, "large.bin", content)
@@ -106,7 +106,7 @@ class HashVerifierTest {
     }
 
     @Test
-    fun computeHash_emptyFile_returnsCorrectHash() {
+    fun computeHash_emptyFile_returnsCorrectHash() = runTest {
         val file = TestFixtures.createTestFile(tempDir, "empty.txt", ByteArray(0))
 
         val hash = HashVerifier.computeHash(file)

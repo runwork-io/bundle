@@ -3,6 +3,7 @@ package io.runwork.bundle.storage
 import io.runwork.bundle.TestFixtures
 import io.runwork.bundle.manifest.BundleFile
 import io.runwork.bundle.manifest.FileType
+import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -32,12 +33,12 @@ class StorageManagerTest {
     }
 
     @Test
-    fun hasVersion_returnsFalseForMissingVersion() {
+    fun hasVersion_returnsFalseForMissingVersion() = runTest {
         assertFalse(storageManager.hasVersion(42))
     }
 
     @Test
-    fun hasVersion_returnsFalseWithoutCompleteMarker() {
+    fun hasVersion_returnsFalseWithoutCompleteMarker() = runTest {
         // Create version directory but no .complete marker
         val versionDir = tempDir.resolve("versions/42")
         Files.createDirectories(versionDir)
@@ -47,7 +48,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun hasVersion_returnsTrueWhenComplete() {
+    fun hasVersion_returnsTrueWhenComplete() = runTest {
         // Create version directory with .complete marker
         val versionDir = tempDir.resolve("versions/42")
         Files.createDirectories(versionDir)
@@ -57,13 +58,13 @@ class StorageManagerTest {
     }
 
     @Test
-    fun listVersions_returnsEmptyWhenNone() {
+    fun listVersions_returnsEmptyWhenNone() = runTest {
         val versions = storageManager.listVersions()
         assertTrue(versions.isEmpty())
     }
 
     @Test
-    fun listVersions_returnsSortedVersions() {
+    fun listVersions_returnsSortedVersions() = runTest {
         // Create multiple version directories
         Files.createDirectories(tempDir.resolve("versions/10"))
         Files.createDirectories(tempDir.resolve("versions/5"))
@@ -75,7 +76,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun listVersions_ignoresNonNumericDirectories() {
+    fun listVersions_ignoresNonNumericDirectories() = runTest {
         Files.createDirectories(tempDir.resolve("versions/42"))
         Files.createDirectories(tempDir.resolve("versions/invalid"))
         Files.createDirectories(tempDir.resolve("versions/abc123"))
@@ -86,7 +87,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_createsHardLinks() {
+    fun prepareVersion_createsHardLinks() = runTest {
         // Store a file in CAS first
         val content = "Test JAR content"
         val hash = TestFixtures.computeHash(content.toByteArray())
@@ -118,7 +119,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_createsNestedDirectories() {
+    fun prepareVersion_createsNestedDirectories() = runTest {
         val content = "Native library content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.dylib", content)
@@ -143,7 +144,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_createsCompleteMarker() {
+    fun prepareVersion_createsCompleteMarker() = runTest {
         val content = "Content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -163,7 +164,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_throwsForMissingCasFile() {
+    fun prepareVersion_throwsForMissingCasFile() = runTest {
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
                 BundleFile(
@@ -182,12 +183,12 @@ class StorageManagerTest {
     }
 
     @Test
-    fun getCurrentVersion_returnsNullWhenNotSet() {
+    fun getCurrentVersion_returnsNullWhenNotSet() = runTest {
         assertNull(storageManager.getCurrentVersion())
     }
 
     @Test
-    fun setCurrentVersion_createsPointer() {
+    fun setCurrentVersion_createsPointer() = runTest {
         // Create a version first
         Files.createDirectories(tempDir.resolve("versions/42"))
 
@@ -197,7 +198,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun getCurrentVersion_readsFromPointer() {
+    fun getCurrentVersion_readsFromPointer() = runTest {
         Files.createDirectories(tempDir.resolve("versions/100"))
         storageManager.setCurrentVersion(100)
 
@@ -207,7 +208,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun setCurrentVersion_updatesExistingPointer() {
+    fun setCurrentVersion_updatesExistingPointer() = runTest {
         Files.createDirectories(tempDir.resolve("versions/1"))
         Files.createDirectories(tempDir.resolve("versions/2"))
 
@@ -219,7 +220,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun cleanupOldVersions_keepsCurrentAndPrevious() {
+    fun cleanupOldVersions_keepsCurrentAndPrevious() = runTest {
         // Create multiple versions
         for (v in listOf(1L, 2L, 3L, 4L, 5L)) {
             val versionDir = tempDir.resolve("versions/$v")
@@ -236,7 +237,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun cleanupOldVersions_deletesOrphanedCasFiles() {
+    fun cleanupOldVersions_deletesOrphanedCasFiles() = runTest {
         // Store files in CAS
         val content1 = "Content 1"
         val content2 = "Content 2"
@@ -269,7 +270,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun verifyVersion_returnsEmptyForValidVersion() {
+    fun verifyVersion_returnsEmptyForValidVersion() = runTest {
         val content = "Valid content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -289,7 +290,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun verifyVersion_returnsFailuresForTamperedFiles() {
+    fun verifyVersion_returnsFailuresForTamperedFiles() = runTest {
         val content = "Original content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -316,7 +317,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun verifyVersion_returnsFailuresForMissingFiles() {
+    fun verifyVersion_returnsFailuresForMissingFiles() = runTest {
         val content = "Content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -343,7 +344,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun saveManifest_and_loadManifest_roundTrip() {
+    fun saveManifest_and_loadManifest_roundTrip() = runTest {
         val manifestJson = """{"schemaVersion":1,"buildNumber":42}"""
 
         storageManager.saveManifest(manifestJson)
@@ -353,13 +354,13 @@ class StorageManagerTest {
     }
 
     @Test
-    fun loadManifest_returnsNullWhenNotSaved() {
+    fun loadManifest_returnsNullWhenNotSaved() = runTest {
         val loaded = storageManager.loadManifest()
         assertNull(loaded)
     }
 
     @Test
-    fun createTempFile_createsFileInTempDir() {
+    fun createTempFile_createsFileInTempDir() = runTest {
         val tempFile = storageManager.createTempFile("test")
 
         assertTrue(Files.exists(tempFile))
@@ -367,7 +368,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun cleanupTemp_deletesAllTempFiles() {
+    fun cleanupTemp_deletesAllTempFiles() = runTest {
         // Create some temp files
         val temp1 = storageManager.createTempFile("test1")
         val temp2 = storageManager.createTempFile("test2")

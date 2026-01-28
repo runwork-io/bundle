@@ -6,11 +6,10 @@ import io.runwork.bundle.manifest.FileType
 import io.runwork.bundle.manifest.ManifestSigner
 import io.runwork.bundle.storage.PlatformPaths
 import io.runwork.bundle.verification.HashVerifier
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
 import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -52,7 +51,7 @@ fun runCli(args: Array<String>): Int {
             }
 
             is CliConfig.CreateBundle -> {
-                BundleCreator(config).create()
+                runBlocking { BundleCreator(config).create() }
             }
         }
         0 // Success
@@ -211,7 +210,7 @@ private val prettyJson = Json { prettyPrint = true }
  */
 private class BundleCreator(private val config: CliConfig.CreateBundle) {
 
-    fun create() {
+    suspend fun create() {
         // 1. Validate input
         require(config.inputDir.exists()) { "Input directory does not exist: ${config.inputDir}" }
 

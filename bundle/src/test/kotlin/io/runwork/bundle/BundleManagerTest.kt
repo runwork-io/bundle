@@ -267,7 +267,7 @@ class BundleManagerTest {
     }
 
     @Test
-    fun hasBundleInstalled_returnsFalseInitially() {
+    fun hasBundleInstalled_returnsFalseInitially() = runTest {
         assertFalse(bundleManager.hasBundleInstalled())
     }
 
@@ -297,12 +297,12 @@ class BundleManagerTest {
     }
 
     @Test
-    fun getCurrentBuildNumber_returnsNullWhenNotInstalled() {
+    fun getCurrentBuildNumber_returnsNullWhenNotInstalled() = runTest {
         assertNull(bundleManager.getCurrentBuildNumber())
     }
 
     @Test
-    fun getCurrentManifest_returnsNullWhenNotInstalled() {
+    fun getCurrentManifest_returnsNullWhenNotInstalled() = runTest {
         assertNull(bundleManager.getCurrentManifest())
     }
 
@@ -374,7 +374,7 @@ class BundleManagerTest {
         assertFalse(Files.exists(temp2))
     }
 
-    private fun setupInstalledVersion(buildNumber: Long, files: List<Pair<String, String>>) {
+    private suspend fun setupInstalledVersion(buildNumber: Long, files: List<Pair<String, String>>) {
         val storageManager = StorageManager(tempDir)
 
         val bundleFiles = files.map { (path, content) ->

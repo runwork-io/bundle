@@ -9,10 +9,14 @@ import io.runwork.bundle.manifest.BundleManifest
 import io.runwork.bundle.storage.StorageManager
 import io.runwork.bundle.storage.VerificationFailure
 import io.runwork.bundle.verification.SignatureVerifier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.Closeable
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Main entry point for bundle management operations.
@@ -320,12 +324,14 @@ class BundleManager(
 
         // Delete corrupted hard links in version directory
         val versionDir = storageManager.getVersionPath(manifest.buildNumber)
-        for (failure in failures) {
-            val filePath = versionDir.resolve(failure.path)
-            try {
-                java.nio.file.Files.deleteIfExists(filePath)
-            } catch (e: Exception) {
-                // Ignore
+        withContext(Dispatchers.IO) {
+            for (failure in failures) {
+                val filePath = versionDir.resolve(failure.path)
+                try {
+                    Files.deleteIfExists(filePath)
+                } catch (e: Exception) {
+                    // Ignore
+                }
             }
         }
 
@@ -346,16 +352,18 @@ class BundleManager(
                         ?: return RepairResult.Failure("Repaired file not in CAS: ${file.path}")
 
                     val destPath = versionDir.resolve(file.path)
-                    java.nio.file.Files.createDirectories(destPath.parent)
+                    withContext(Dispatchers.IO) {
+                        Files.createDirectories(destPath.parent)
 
-                    try {
-                        java.nio.file.Files.createLink(destPath, sourcePath)
-                    } catch (e: Exception) {
-                        java.nio.file.Files.copy(
-                            sourcePath,
-                            destPath,
-                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                        )
+                        try {
+                            Files.createLink(destPath, sourcePath)
+                        } catch (e: Exception) {
+                            Files.copy(
+                                sourcePath,
+                                destPath,
+                                StandardCopyOption.REPLACE_EXISTING
+                            )
+                        }
                     }
                 }
                 RepairResult.Success
@@ -377,7 +385,7 @@ class BundleManager(
      * @return The loaded bundle with communication bridge
      * @throws BundleLoadException if loading fails
      */
-    fun loadBundle(): LoadedBundle {
+    suspend fun loadBundle(): LoadedBundle {
         val manifestJson = storageManager.loadManifest()
             ?: throw io.runwork.bundle.loader.BundleLoadException("No manifest found")
 
@@ -395,7 +403,7 @@ class BundleManager(
      *
      * @return The current build number, or null if no bundle is installed
      */
-    fun getCurrentBuildNumber(): Long? {
+    suspend fun getCurrentBuildNumber(): Long? {
         return storageManager.getCurrentVersion()
     }
 
@@ -404,7 +412,7 @@ class BundleManager(
      *
      * @return The current manifest, or null if none is installed
      */
-    fun getCurrentManifest(): BundleManifest? {
+    suspend fun getCurrentManifest(): BundleManifest? {
         val manifestJson = storageManager.loadManifest() ?: return null
         return try {
             json.decodeFromString<BundleManifest>(manifestJson)
@@ -416,7 +424,7 @@ class BundleManager(
     /**
      * Check if a bundle is installed and ready.
      */
-    fun hasBundleInstalled(): Boolean {
+    suspend fun hasBundleInstalled(): Boolean {
         val version = getCurrentBuildNumber() ?: return false
         return storageManager.hasVersion(version)
     }
@@ -424,7 +432,7 @@ class BundleManager(
     /**
      * Clean up temporary files and old versions.
      */
-    fun cleanup() {
+    suspend fun cleanup() {
         storageManager.cleanupTemp()
         storageManager.cleanupOldVersions()
     }

@@ -1,9 +1,12 @@
 package io.runwork.bundle.storage
 
 import io.runwork.bundle.manifest.BundleManifest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.Comparator
 
 /**
@@ -24,7 +27,10 @@ class StorageManager(
     private val currentPath = appDataDir.resolve("current")
     private val manifestPath = appDataDir.resolve("manifest.json")
 
-    init {
+    /**
+     * Ensure required directories exist.
+     */
+    private suspend fun ensureDirectoriesExist() = withContext(Dispatchers.IO) {
         Files.createDirectories(versionsDir)
         Files.createDirectories(tempDir)
     }
@@ -32,9 +38,9 @@ class StorageManager(
     /**
      * Check if a version is fully downloaded and prepared.
      */
-    fun hasVersion(buildNumber: Long): Boolean {
+    suspend fun hasVersion(buildNumber: Long): Boolean = withContext(Dispatchers.IO) {
         val versionDir = versionsDir.resolve(buildNumber.toString())
-        return Files.exists(versionDir.resolve(".complete"))
+        Files.exists(versionDir.resolve(".complete"))
     }
 
     /**
@@ -47,10 +53,10 @@ class StorageManager(
     /**
      * List all available version build numbers, sorted ascending.
      */
-    fun listVersions(): List<Long> {
-        if (!Files.exists(versionsDir)) return emptyList()
+    suspend fun listVersions(): List<Long> = withContext(Dispatchers.IO) {
+        if (!Files.exists(versionsDir)) return@withContext emptyList()
 
-        return Files.list(versionsDir).use { stream ->
+        Files.list(versionsDir).use { stream ->
             stream
                 .filter { Files.isDirectory(it) }
                 .map { it.fileName.toString().toLongOrNull() }
@@ -73,31 +79,40 @@ class StorageManager(
      * @param manifest The bundle manifest describing all files
      * @throws IllegalStateException if a required file is missing from CAS
      */
-    fun prepareVersion(manifest: BundleManifest) {
+    suspend fun prepareVersion(manifest: BundleManifest) {
+        ensureDirectoriesExist()
         val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
-        Files.createDirectories(versionDir)
+
+        withContext(Dispatchers.IO) {
+            Files.createDirectories(versionDir)
+        }
 
         for (file in manifest.files) {
             val sourcePath = contentStore.getPath(file.hash)
                 ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
 
             val destPath = versionDir.resolve(file.path)
-            Files.createDirectories(destPath.parent)
 
-            if (Files.exists(destPath)) continue
+            withContext(Dispatchers.IO) {
+                Files.createDirectories(destPath.parent)
 
-            try {
-                // Try hard link first (most efficient, no data duplication)
-                Files.createLink(destPath, sourcePath)
-            } catch (e: Exception) {
-                // Fall back to copy if hard link fails
-                // This can happen on Windows in some cases, or cross-filesystem
-                Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING)
+                if (Files.exists(destPath)) return@withContext
+
+                try {
+                    // Try hard link first (most efficient, no data duplication)
+                    Files.createLink(destPath, sourcePath)
+                } catch (e: Exception) {
+                    // Fall back to copy if hard link fails
+                    // This can happen on Windows in some cases, or cross-filesystem
+                    Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING)
+                }
             }
         }
 
         // Mark as complete
-        Files.createFile(versionDir.resolve(".complete"))
+        withContext(Dispatchers.IO) {
+            Files.createFile(versionDir.resolve(".complete"))
+        }
     }
 
     /**
@@ -108,12 +123,12 @@ class StorageManager(
      *
      * @return The current version build number, or null if none is set
      */
-    fun getCurrentVersion(): Long? {
-        if (!Files.exists(currentPath)) return null
+    suspend fun getCurrentVersion(): Long? = withContext(Dispatchers.IO) {
+        if (!Files.exists(currentPath)) return@withContext null
 
         // Try symlink first (Mac/Linux), then fall back to text file (Windows)
         // Using try-catch instead of checking type first to avoid race conditions
-        return try {
+        try {
             // Try to read as symlink
             val target = Files.readSymbolicLink(currentPath)
             target.fileName.toString().toLongOrNull()
@@ -138,7 +153,7 @@ class StorageManager(
      * @param buildNumber The version to set as current
      * @throws IllegalStateException if unable to set the current version
      */
-    fun setCurrentVersion(buildNumber: Long) {
+    suspend fun setCurrentVersion(buildNumber: Long) = withContext(Dispatchers.IO) {
         val versionDir = versionsDir.resolve(buildNumber.toString())
 
         Files.deleteIfExists(currentPath)
@@ -164,7 +179,7 @@ class StorageManager(
     /**
      * Save the current manifest to disk.
      */
-    fun saveManifest(manifestJson: String) {
+    suspend fun saveManifest(manifestJson: String) = withContext(Dispatchers.IO) {
         Files.writeString(manifestPath, manifestJson)
     }
 
@@ -173,9 +188,9 @@ class StorageManager(
      *
      * @return The manifest JSON string, or null if not found
      */
-    fun loadManifest(): String? {
-        if (!Files.exists(manifestPath)) return null
-        return Files.readString(manifestPath)
+    suspend fun loadManifest(): String? = withContext(Dispatchers.IO) {
+        if (!Files.exists(manifestPath)) return@withContext null
+        Files.readString(manifestPath)
     }
 
     /**
@@ -184,7 +199,7 @@ class StorageManager(
      * Also cleans up orphaned CAS files that are no longer referenced
      * by any version.
      */
-    fun cleanupOldVersions() {
+    suspend fun cleanupOldVersions() {
         val current = getCurrentVersion() ?: return
         val versions = listVersions()
 
@@ -208,9 +223,9 @@ class StorageManager(
     /**
      * Delete a version directory and all its contents.
      */
-    private fun deleteVersionDirectory(buildNumber: Long) {
+    private suspend fun deleteVersionDirectory(buildNumber: Long) = withContext(Dispatchers.IO) {
         val versionDir = versionsDir.resolve(buildNumber.toString())
-        if (!Files.exists(versionDir)) return
+        if (!Files.exists(versionDir)) return@withContext
 
         Files.walk(versionDir)
             .sorted(Comparator.reverseOrder())
@@ -224,43 +239,52 @@ class StorageManager(
      * For files that aren't hard links (e.g., on Windows with copy fallback),
      * we still need to compute hashes.
      */
-    private fun cleanupOrphanedCasFiles() {
+    private suspend fun cleanupOrphanedCasFiles() {
         // Build a set of CAS file inodes that are referenced by version directories
         val casDir = appDataDir.resolve("cas")
-        if (!Files.exists(casDir)) return
+        if (!withContext(Dispatchers.IO) { Files.exists(casDir) }) return
 
-        // Get all CAS file paths and their inodes
-        val casFiles = Files.list(casDir).use { stream ->
-            stream.filter { Files.isRegularFile(it) }
-                .map { it to getFileKey(it) }
-                .toList()
+        // Get all CAS file paths
+        val casFilePaths = withContext(Dispatchers.IO) {
+            Files.list(casDir).use { stream ->
+                stream.filter { Files.isRegularFile(it) }.toList()
+            }
         }
 
-        if (casFiles.isEmpty()) return
+        if (casFilePaths.isEmpty()) return
+
+        // Compute file keys for CAS files
+        val casFiles = casFilePaths.map { it to getFileKey(it) }
 
         // Collect file keys (inodes) from version directories
         val referencedKeys = mutableSetOf<Any>()
 
         for (version in listVersions()) {
             val versionDir = versionsDir.resolve(version.toString())
-            if (!Files.exists(versionDir)) continue
+            if (!withContext(Dispatchers.IO) { Files.exists(versionDir) }) continue
 
-            Files.walk(versionDir).use { stream ->
-                stream
-                    .filter { Files.isRegularFile(it) && it.fileName.toString() != ".complete" }
-                    .forEach { file ->
-                        referencedKeys.add(getFileKey(file))
-                    }
+            val versionFiles = withContext(Dispatchers.IO) {
+                Files.walk(versionDir).use { stream ->
+                    stream
+                        .filter { Files.isRegularFile(it) && it.fileName.toString() != ".complete" }
+                        .toList()
+                }
+            }
+
+            for (file in versionFiles) {
+                referencedKeys.add(getFileKey(file))
             }
         }
 
         // Delete CAS files whose inode is not referenced
         for ((casFile, fileKey) in casFiles) {
             if (fileKey !in referencedKeys) {
-                try {
-                    Files.deleteIfExists(casFile)
-                } catch (e: Exception) {
-                    // Ignore deletion failures
+                withContext(Dispatchers.IO) {
+                    try {
+                        Files.deleteIfExists(casFile)
+                    } catch (e: Exception) {
+                        // Ignore deletion failures
+                    }
                 }
             }
         }
@@ -270,15 +294,16 @@ class StorageManager(
      * Get a unique file key (typically inode on Unix, file key on Windows).
      * This allows efficient comparison of hard links without computing hashes.
      */
-    private fun getFileKey(path: Path): Any {
-        return try {
-            // On Windows, fileKey() returns null, so we need to fall back to hash
-            Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes::class.java).fileKey()
-                ?: contentStore.computeHash(path)
-        } catch (e: Exception) {
-            // Fallback: use the hash if we can't get the file key
-            contentStore.computeHash(path)
+    private suspend fun getFileKey(path: Path): Any {
+        val fileKey = withContext(Dispatchers.IO) {
+            try {
+                // On Windows, fileKey() returns null, so we need to fall back to hash
+                Files.readAttributes(path, BasicFileAttributes::class.java).fileKey()
+            } catch (e: Exception) {
+                null
+            }
         }
+        return fileKey ?: contentStore.computeHash(path)
     }
 
     /**
@@ -287,15 +312,18 @@ class StorageManager(
      * @param prefix Prefix for the temp file name
      * @return Path to the new temporary file
      */
-    fun createTempFile(prefix: String): Path {
-        return Files.createTempFile(tempDir, prefix, ".tmp")
+    suspend fun createTempFile(prefix: String): Path {
+        ensureDirectoriesExist()
+        return withContext(Dispatchers.IO) {
+            Files.createTempFile(tempDir, prefix, ".tmp")
+        }
     }
 
     /**
      * Clean up the temp directory.
      */
-    fun cleanupTemp() {
-        if (!Files.exists(tempDir)) return
+    suspend fun cleanupTemp() = withContext(Dispatchers.IO) {
+        if (!Files.exists(tempDir)) return@withContext
 
         Files.list(tempDir).use { stream ->
             stream.forEach { file ->
@@ -314,14 +342,14 @@ class StorageManager(
      * @param manifest The manifest to verify against
      * @return List of files that failed verification (empty if all passed)
      */
-    fun verifyVersion(manifest: BundleManifest): List<VerificationFailure> {
+    suspend fun verifyVersion(manifest: BundleManifest): List<VerificationFailure> {
         val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
         val failures = mutableListOf<VerificationFailure>()
 
         for (file in manifest.files) {
             val filePath = versionDir.resolve(file.path)
 
-            if (!Files.exists(filePath)) {
+            if (!withContext(Dispatchers.IO) { Files.exists(filePath) }) {
                 failures.add(VerificationFailure(file.path, file.hash, null, "File missing"))
                 continue
             }
