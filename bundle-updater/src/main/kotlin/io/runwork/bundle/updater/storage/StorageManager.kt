@@ -3,6 +3,7 @@ package io.runwork.bundle.updater.storage
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
+import io.runwork.bundle.common.verification.VerificationFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -347,17 +348,3 @@ class StorageManager(
         }
     }
 }
-
-/**
- * Represents a file that failed verification.
- */
-data class VerificationFailure(
-    /** Relative path of the file */
-    val path: String,
-    /** Expected SHA-256 hash */
-    val expectedHash: String,
-    /** Actual SHA-256 hash (null if file missing) */
-    val actualHash: String?,
-    /** Reason for failure */
-    val reason: String,
-)

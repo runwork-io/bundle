@@ -9,6 +9,7 @@ import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
+import io.runwork.bundle.common.verification.VerificationFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString

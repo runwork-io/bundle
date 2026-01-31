@@ -76,7 +76,8 @@ private fun printUsage() {
           Create bundle:
             --input <dir>           Input directory containing files to bundle
             --output <dir>          Output directory for manifest.json, bundle.zip, and files/
-            --platform <platform>   Platform identifier (e.g., macos-arm64, windows-x86_64)
+            --platform <platform>   Platform identifier (optional, auto-detected if not specified)
+                                    Examples: macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64
             --private-key-env <env> Environment variable containing Base64-encoded private key
             --private-key-path <path> Path to file containing Base64-encoded private key
             --build-number <num>    Optional build number (defaults to current timestamp)

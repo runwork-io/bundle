@@ -383,14 +383,19 @@ class DownloadManager(
                     if (expectedHash != null) {
                         // Write to temp file
                         val tempFile = storageManager.createTempFile("extract")
-                        Files.newOutputStream(tempFile).use { output ->
-                            zip.copyTo(output)
-                        }
+                        try {
+                            Files.newOutputStream(tempFile).use { output ->
+                                zip.copyTo(output)
+                            }
 
-                        // Verify and store
-                        val stored = contentStore.storeWithHash(tempFile, expectedHash)
-                        if (!stored) {
-                            throw DownloadException("Hash mismatch for ${entry.name} in bundle.zip")
+                            // Verify and store
+                            val stored = contentStore.storeWithHash(tempFile, expectedHash)
+                            if (!stored) {
+                                throw DownloadException("Hash mismatch for ${entry.name} in bundle.zip")
+                            }
+                        } finally {
+                            // Clean up temp file (storeWithHash moves it on success, so this handles failures)
+                            Files.deleteIfExists(tempFile)
                         }
                     }
                 }
