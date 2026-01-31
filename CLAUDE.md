@@ -13,20 +13,56 @@ Key capabilities:
 - Isolated classloaders for bundle execution
 - Cross-platform support (macOS, Linux, Windows)
 
+## Module Architecture
+
+The system is split into four modules with clear responsibilities:
+
+| Module | Purpose | Ships With |
+|--------|---------|------------|
+| **bundle-common** | Shared data classes, verification, CAS | All modules |
+| **bundle-creator** | Create and sign bundles | CI only |
+| **bundle-bootstrap** | Validate and launch bundles | Shell app |
+| **bundle-updater** | Download bundles (initial + updates) | Shell app AND inside bundle |
+
+### Module Dependency Graph
+
+```
+                       bundle-common
+                      /      |      \
+                     /       |       \
+     bundle-creator    bundle-bootstrap    bundle-updater
+          (CI)              |                  |
+                            |                  |
+                            └──────┬───────────┘
+                                   |
+                              Shell app
+                           (bootstrap + updater)
+
+                            Also: bundle-updater
+                            ships inside bundle
+                            for self-updates
+```
+
 ## Build & Test Commands
 
 ```bash
 # Run all tests
-./gradlew :bundle:test
+./gradlew test
+
+# Run tests for a specific module
+./gradlew :bundle-common:test
+./gradlew :bundle-bootstrap:test
+./gradlew :bundle-updater:test
+./gradlew :bundle-creator:test
 
 # Run a specific test class
-./gradlew :bundle:test --tests "io.runwork.bundle.BundleManagerTest"
+./gradlew :bundle-updater:test --tests "io.runwork.bundle.updater.storage.StorageManagerTest"
 
 # Build the project
 ./gradlew build
 
-# Run the CLI
-./gradlew :bundle:run --args="--help"
+# Run the CLI (bundle creator)
+./gradlew :bundle-creator:run --args="create --help"
 ```
 
 ## Project Structure
@@ -34,105 +70,177 @@ Key capabilities:
 ```
 bundle/
 ├── build.gradle.kts                    # Root build config
-├── bundle/
-│   ├── build.gradle.kts                # Module config (Java 17)
-│   └── src/main/kotlin/io/runwork/bundle/
-│       ├── BundleManager.kt            # Main orchestration class
-│       ├── BundleConfig.kt             # Configuration data class
-│       ├── cli/BundleCreatorCli.kt     # CLI for creating bundles
-│       ├── download/
-│       │   ├── DownloadManager.kt      # HTTP downloads via OkHttp
-│       │   └── UpdateDecider.kt        # Strategy selection logic
-│       ├── loader/
-│       │   ├── BundleLoader.kt         # Loads bundles into classloaders
-│       │   └── BundleClassLoader.kt    # Child-first classloader
+├── bundle-common/                      # Shared code
+│   └── src/main/kotlin/io/runwork/bundle/common/
 │       ├── manifest/
-│       │   ├── BundleManifest.kt       # Core data model
-│       │   └── ManifestSigner.kt       # Ed25519 signing
+│       │   ├── BundleManifest.kt       # Data model
+│       │   ├── BundleFile.kt           # File entry
+│       │   └── FileType.kt             # JAR, NATIVE, RESOURCE, EXECUTABLE
+│       ├── verification/
+│       │   ├── SignatureVerifier.kt    # Ed25519 verify (NOT sign)
+│       │   └── HashVerifier.kt         # SHA-256 hashing
 │       ├── storage/
-│       │   ├── StorageManager.kt       # Version/file management
-│       │   └── ContentAddressableStore.kt  # Hash-based storage
-│       └── verification/
-│           ├── HashVerifier.kt         # SHA-256 hashing (Okio)
-│           └── SignatureVerifier.kt    # Ed25519 verification
+│       │   └── ContentAddressableStore.kt
+│       └── BundleLaunchConfig.kt       # Config passed to bundle main()
+│
+├── bundle-bootstrap/                   # Validation and launch
+│   └── src/main/kotlin/io/runwork/bundle/bootstrap/
+│       ├── Bootstrap.kt                # Main orchestrator (validate/launch)
+│       ├── BootstrapConfig.kt          # Shell-provided config
+│       ├── ValidationResult.kt         # Validation outcomes
+│       └── loader/
+│           ├── BundleClassLoader.kt    # Child-first classloader
+│           └── LoadedBundle.kt         # Launched bundle handle
+│
+├── bundle-updater/                     # Download and update
+│   └── src/main/kotlin/io/runwork/bundle/updater/
+│       ├── Updater.kt                  # Main API (one-shot + background)
+│       ├── UpdaterConfig.kt            # Runtime config
+│       ├── UpdaterCallbacks.kt         # Event callbacks
+│       ├── download/
+│       │   ├── DownloadManager.kt      # HTTP client, file downloads
+│       │   ├── DownloadProgress.kt     # Progress reporting
+│       │   └── UpdateDecider.kt        # Full vs incremental strategy
+│       └── storage/
+│           ├── StorageManager.kt       # Version directory management
+│           └── CleanupManager.kt       # Old version & orphan CAS cleanup
+│
+└── bundle-creator/                     # CI tooling
+    └── src/main/kotlin/io/runwork/bundle/creator/
+        ├── ManifestSigner.kt           # Ed25519 signing
+        ├── BundlePackager.kt           # Creates bundle.zip
+        ├── ManifestBuilder.kt          # Builds manifest from directory
+        └── cli/
+            └── BundleCreatorCli.kt     # CLI entry point
 ```
 
-## Architecture
+## Key Classes by Module
 
-### Layered Design
+### bundle-common
+| Class | Purpose |
+|-------|---------|
+| `BundleManifest` | Core data model for bundle metadata |
+| `ContentAddressableStore` | Hash-based storage - store(), contains(), getPath() |
+| `HashVerifier` | SHA-256 computation using Okio |
+| `SignatureVerifier` | Ed25519 verification using JDK built-in |
+| `BundleLaunchConfig` | Config passed from shell to bundle's main() |
 
-1. **API Layer** (`BundleManager`): Main entry point for applications
-2. **Download Layer** (`DownloadManager`, `UpdateDecider`): Smart download strategy
-3. **Storage Layer** (`StorageManager`, `ContentAddressableStore`): File organization
-4. **Verification Layer** (`HashVerifier`, `SignatureVerifier`): Integrity checking
-5. **Loading Layer** (`BundleLoader`, `BundleClassLoader`): Bundle execution
+### bundle-bootstrap
+| Class | Purpose |
+|-------|---------|
+| `Bootstrap` | Main orchestrator - validate() then launch() |
+| `BundleClassLoader` | Child-first classloader for bundle isolation |
+| `LoadedBundle` | Handle to a running bundle with message bridge |
 
-### Content-Addressable Storage (CAS)
+### bundle-updater
+| Class | Purpose |
+|-------|---------|
+| `Updater` | Main API - downloadLatest() for shell, start() for background updates |
+| `StorageManager` | Version lifecycle - prepareVersion(), setCurrentVersion() |
+| `DownloadManager` | HTTP downloads - downloadBundle(), fetchManifest() |
+| `UpdateDecider` | Strategy selection - FullBundle, Incremental, or NoDownloadNeeded |
+| `CleanupManager` | Removes old versions and orphaned CAS files |
 
-Files are stored by their SHA-256 hash, enabling:
-- Deduplication across versions (same content = same hash = stored once)
-- Hard-linking from version directories to CAS (efficient on Unix systems)
-- Fallback to copying on Windows or cross-filesystem scenarios
+### bundle-creator
+| Class | Purpose |
+|-------|---------|
+| `ManifestSigner` | Ed25519 signing of manifests |
+| `ManifestBuilder` | Builds manifest from directory contents |
+| `BundlePackager` | Creates bundle.zip from directory |
 
-### Directory Structure at Runtime
+## Storage Layout
 
 ```
 appDataDir/
-├── current                  # Symlink (Unix) or text file (Windows) pointing to active version
-├── manifest.json            # Current manifest
-├── cas/                     # Content-addressable storage
-│   └── <sha256-hash>        # Files named by their hash
+├── manifest.json              # Current manifest (points to active version)
+├── current                    # Symlink (Unix) or text file (Windows) → version dir
+├── cas/                       # Content-addressable store
+│   └── {sha256-hash}          #   Files named by hash, immutable once written
 ├── versions/
-│   └── <buildNumber>/
-│       ├── .complete        # Marker file indicating successful preparation
-│       └── <files>          # Hard-links to CAS
-└── temp/                    # Temporary files during downloads
+│   └── {buildNumber}/
+│       ├── .complete          # Marker file (version is fully prepared)
+│       └── {files...}         # Hard-linked from CAS
+└── temp/                      # Download staging (incomplete downloads)
 ```
 
 ## Key Patterns & Conventions
 
 ### Coroutines
-
 - All I/O operations use `withContext(Dispatchers.IO)`
 - Public API methods are `suspend` functions
 - Tests use `kotlinx.coroutines.test.runTest`
 
 ### Kotlin Style
-
 - Prefer `listOf()` over `emptyList()` for empty lists
 - Prefer `mapOf()` over `emptyMap()` for empty maps
 - Prefer `setOf()` over `emptySet()` for empty sets
 
 ### Hash & Signature Format
-
 - Hashes: Always prefixed with `sha256:` (e.g., `sha256:abc123...`)
 - Signatures: Always prefixed with `ed25519:`
 - Use `HashVerifier.computeHash()` for consistency
 
 ### Error Handling
-
 - Retry logic with exponential backoff for network failures
-- Sealed classes for result types (`UpdateCheckResult`, `BundleVerificationResult`, etc.)
+- Sealed classes for result types (`UpdateCheckResult`, `ValidationResult`, etc.)
 - Signature failures are retried (could be CDN corruption)
 
 ### Platform Conventions
-
 - Platform IDs: `{os}-{arch}` format (e.g., `macos-arm64`, `windows-x86_64`, `linux-x86_64`)
 - Paths in manifests use forward slashes (normalized on Windows)
 - Version numbers are `Long` values (monotonically increasing)
 
-## Main Classes
+## Critical Design Rules
 
-| Class | Purpose |
-|-------|---------|
-| `BundleManager` | Main orchestrator - checkForUpdate(), downloadUpdate(), loadBundle(), verifyLocalBundle() |
-| `StorageManager` | Version lifecycle - prepareVersion(), setCurrentVersion(), verifyVersion() |
-| `ContentAddressableStore` | Hash-based storage - store(), contains(), getPath() |
-| `DownloadManager` | HTTP downloads - downloadBundle(), fetchManifest() |
-| `UpdateDecider` | Strategy selection - returns FullBundle, Incremental, or NoDownloadNeeded |
-| `BundleLoader` | Classloader creation - load() creates isolated classloader and invokes main |
-| `HashVerifier` | SHA-256 computation using Okio |
-| `SignatureVerifier` | Ed25519 verification using JDK built-in |
+### Update-First, Cleanup-Last Strategy
+**Never delete files until we're fully up-to-date.**
+
+Cleanup runs ONLY when:
+1. We checked for updates from the server
+2. No update is available (current version == latest)
+3. Current version is valid and complete
+
+This ensures interrupted downloads preserve partial progress in CAS.
+
+### Downgrade Attack Prevention
+All download paths must check `buildNumber > current`:
+```kotlin
+if (manifest.buildNumber <= currentBuild) {
+    return DownloadResult.AlreadyUpToDate  // Reject downgrade
+}
+```
+Use `<=` not `<` to prevent replay of same version.
+
+### Concurrency Protection
+StorageManager uses a mutex for all write operations:
+```kotlin
+suspend fun <T> withStorageLock(block: suspend () -> T): T {
+    return storageMutex.withLock { block() }
+}
+```
+
+### CAS Immutability
+- Files in CAS are immutable (named by hash)
+- If file exists in CAS, it's valid (hash verified on store)
+- Partial downloads go to temp, only move to CAS when complete
+
+## Data Flow
+
+### Shell Startup (no bundle)
+1. `Bootstrap.validate()` → returns `NoBundleExists`
+2. `Updater.downloadLatest()` → fetches manifest, downloads files to CAS, prepares version
+3. `Bootstrap.validate()` → returns `Valid`
+4. `Bootstrap.launch()` → creates classloader, invokes main()
+
+### Shell Startup (bundle exists)
+1. `Bootstrap.validate()` → verifies signature and file hashes → returns `Valid`
+2. `Bootstrap.launch()` → creates classloader, invokes main()
+
+### Bundle Self-Update (runtime)
+1. `Updater.start(callbacks)` → starts background coroutine
+2. Periodically fetches manifest, compares buildNumber
+3. If newer: downloads files, prepares version, calls `onUpdateReady()`
+4. Bundle calls `restartApplication()` to apply update
 
 ## Testing
 
@@ -146,24 +254,21 @@ appDataDir/
 - `kotlinx-coroutines-core` - Async operations
 - `kotlinx-serialization-json` - JSON serialization
 - `okio` - Efficient I/O and hashing
-- `okhttp3` - HTTP client
+- `okhttp3` - HTTP client (bundle-updater only)
 
 ## Common Tasks
 
 ### Adding a New File Type
-
-1. Add to `FileType` enum in `BundleManifest.kt`
-2. Update `BundleLoader` if special handling needed
+1. Add to `FileType` enum in `bundle-common/manifest/FileType.kt`
+2. Update `BundleClassLoader` if special handling needed
 3. Update CLI if needed for bundle creation
 
 ### Modifying Download Strategy
-
 Look at `UpdateDecider.decide()` which calculates effective cost:
 - Full bundle: `totalSize`
 - Incremental: `missingSize + (numMissingFiles * REQUEST_OVERHEAD)`
 
 ### Adding New Verification
-
 1. Add verification logic to `StorageManager.verifyVersion()` or create new verifier
-2. Integrate into `BundleManager.verifyLocalBundle()`
+2. Integrate into `Bootstrap.validate()`
 3. Add appropriate test coverage

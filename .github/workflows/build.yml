@@ -31,5 +31,5 @@ jobs:
         if: always()
         with:
           name: test-results-${{ matrix.os }}
-          path: build/reports/tests/
+          path: '**/build/reports/tests/'
           retention-days: 7
