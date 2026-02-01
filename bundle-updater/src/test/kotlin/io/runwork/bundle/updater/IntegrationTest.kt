@@ -3,6 +3,7 @@ package io.runwork.bundle.updater
 import io.runwork.bundle.bootstrap.BundleBootstrap
 import io.runwork.bundle.bootstrap.BundleBootstrapConfig
 import io.runwork.bundle.bootstrap.BundleValidationResult
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.FileType
@@ -91,7 +92,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
@@ -159,7 +160,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
@@ -324,7 +325,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = "https://updates.example.com", // Not used for validation
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
         )
         val bootstrap = BundleBootstrap(config)
@@ -360,7 +361,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = "https://updates.example.com",
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
         )
         val bootstrap = BundleBootstrap(config)
@@ -393,7 +394,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = "https://updates.example.com",
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1, // Running shell v1
         )
         val bootstrap = BundleBootstrap(config)
@@ -573,7 +574,7 @@ class IntegrationTest {
             appDataDir = appDataDir,
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
+            platform = Platform.fromString("macos-arm64"),
             currentBuildNumber = 200, // Currently at version 200
         )
         val updater = BundleUpdater(updaterConfig)

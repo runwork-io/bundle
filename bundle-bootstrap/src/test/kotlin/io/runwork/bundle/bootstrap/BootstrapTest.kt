@@ -1,6 +1,7 @@
 package io.runwork.bundle.bootstrap
 
 import io.runwork.bundle.bootstrap.loader.BundleLoadException
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.FileType
@@ -272,8 +273,8 @@ class BootstrapTest {
             appDataDir = appDataDir,
             baseUrl = "https://example.com",
             publicKey = keyPair.publicKeyBase64,
-            platform = platform,
             shellVersion = shellVersion,
+            platform = Platform.fromString(platform),
             mainClass = "io.runwork.TestMain"
         )
         return BundleBootstrap(config)

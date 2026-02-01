@@ -174,7 +174,7 @@ private fun parseArgs(args: Array<String>): CliConfig {
 
     if (inputDir == null) throw IllegalArgumentException("--input is required")
     if (outputDir == null) throw IllegalArgumentException("--output is required")
-    if (platform == null) platform = PlatformPaths.getPlatform()
+    if (platform == null) platform = PlatformPaths.getPlatform().toString()
     if (privateKeyEnv == null && privateKeyPath == null) {
         throw IllegalArgumentException("Either --private-key-env or --private-key-path is required")
     }
