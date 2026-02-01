@@ -92,14 +92,6 @@ class StorageManager(
     }
 
     /**
-     * List all version build numbers.
-     *
-     * Note: This returns all version directories, not just "complete" ones.
-     * Completeness is determined by whether manifest.json points to the version.
-     */
-    suspend fun listCompleteVersions(): List<Long> = listVersions()
-
-    /**
      * Prepare a version directory by linking files from CAS.
      *
      * For each file in the manifest:

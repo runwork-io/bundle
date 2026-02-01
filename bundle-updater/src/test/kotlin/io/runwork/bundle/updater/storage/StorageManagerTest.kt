@@ -186,16 +186,15 @@ class StorageManagerTest {
     }
 
     @Test
-    fun listCompleteVersions_returnsAllVersions() = runTest {
-        // listCompleteVersions now delegates to listVersions
+    fun listVersions_returnsAllVersions() = runTest {
         for (v in listOf(1L, 2L, 3L)) {
             val versionDir = tempDir.resolve("versions/$v")
             Files.createDirectories(versionDir)
         }
 
-        val completeVersions = storageManager.listCompleteVersions()
+        val versions = storageManager.listVersions()
 
-        assertEquals(listOf(1L, 2L, 3L), completeVersions)
+        assertEquals(listOf(1L, 2L, 3L), versions)
     }
 
     @Test
