@@ -98,15 +98,3 @@ when (val result = bootstrap.validate()) {
 }
 ```
 
-### CLI Tool
-
-Create signed bundles using the CLI:
-
-```bash
-./gradlew run --args="create \
-    --input /path/to/app \
-    --output /path/to/bundle.zip \
-    --private-key /path/to/private.key \
-    --platform macos-arm64 \
-    --main-class com.example.MainKt"
-```

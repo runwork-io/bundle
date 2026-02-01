@@ -61,8 +61,6 @@ The system is split into four modules with clear responsibilities:
 # Build the project
 ./gradlew build
 
-# Run the CLI (bundle creator)
-./gradlew :bundle-creator:run --args="create --help"
 ```
 
 ## Project Structure
@@ -108,9 +106,7 @@ bundle/
     └── src/main/kotlin/io/runwork/bundle/creator/
         ├── BundleManifestSigner.kt     # Ed25519 signing
         ├── BundlePackager.kt           # Creates bundle.zip
-        ├── BundleManifestBuilder.kt    # Builds manifest from directory
-        └── cli/
-            └── BundleCreatorCli.kt     # CLI entry point
+        └── BundleManifestBuilder.kt    # Builds manifest from directory
 ```
 
 ## Key Classes by Module
