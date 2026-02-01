@@ -2,7 +2,6 @@ package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.verification.HashVerifier
 import java.io.File
 import java.time.Instant
@@ -39,7 +38,6 @@ class BundleManifestBuilder {
                 path = relativePath,
                 hash = HashVerifier.computeHash(file.toPath()),
                 size = file.length(),
-                type = detectFileType(relativePath),
             )
         }
 
@@ -75,18 +73,4 @@ class BundleManifestBuilder {
             .toList()
     }
 
-    /**
-     * Detect the file type based on file path.
-     *
-     * @param path Relative path of the file
-     * @return Detected FileType
-     */
-    fun detectFileType(path: String): FileType {
-        return when {
-            path.endsWith(".jar") -> FileType.JAR
-            path.endsWith(".dylib") || path.endsWith(".so") || path.endsWith(".dll") -> FileType.NATIVE
-            path.contains("/bin/") || path.endsWith("/bun") || path == "bun" -> FileType.EXECUTABLE
-            else -> FileType.RESOURCE
-        }
-    }
 }

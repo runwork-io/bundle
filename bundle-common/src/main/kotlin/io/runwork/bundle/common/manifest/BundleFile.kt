@@ -15,7 +15,4 @@ data class BundleFile(
 
     /** File size in bytes */
     val size: Long,
-
-    /** File type for categorization */
-    val type: FileType,
 )

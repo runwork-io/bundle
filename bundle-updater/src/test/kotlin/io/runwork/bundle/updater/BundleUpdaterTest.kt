@@ -3,7 +3,6 @@ package io.runwork.bundle.updater
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.updater.result.DownloadResult
 import io.runwork.bundle.updater.result.UpdateCheckResult
 import kotlinx.coroutines.runBlocking
@@ -55,7 +54,7 @@ class BundleUpdaterTest {
     fun checkNow_returnsUpdateAvailable() = runBlocking {
         // Setup: manifest has buildNumber 200, current is 100
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(bundleFile),
             signer = keyPair.signer,
@@ -82,7 +81,7 @@ class BundleUpdaterTest {
     fun checkNow_returnsUpToDateWhenCurrent() = runBlocking {
         // Setup: manifest has same buildNumber as current
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(bundleFile),
             signer = keyPair.signer,
@@ -128,7 +127,7 @@ class BundleUpdaterTest {
     fun checkNow_returnsFailedOnSignatureFailure() = runBlocking {
         // Setup: manifest with invalid signature
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createTestManifest(
             files = listOf(bundleFile),
             buildNumber = 200
@@ -153,7 +152,7 @@ class BundleUpdaterTest {
     fun checkNow_preventsDowngrade() = runBlocking {
         // Setup: manifest has OLDER buildNumber than current
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(bundleFile),
             signer = keyPair.signer,
@@ -188,7 +187,7 @@ class BundleUpdaterTest {
     fun downloadLatest_preventsDowngrade() = runBlocking {
         // Setup existing bundle at build 100
         val initialContent = "v1-content".toByteArray()
-        val initialFile = TestFixtures.createBundleFile("app.jar", initialContent, FileType.JAR)
+        val initialFile = TestFixtures.createBundleFile("app.jar", initialContent)
         val initialManifest = TestFixtures.createSignedManifest(
             files = listOf(initialFile),
             signer = keyPair.signer,
@@ -221,7 +220,7 @@ class BundleUpdaterTest {
     fun downloadLatest_returnsFailureOnSignatureError() = runBlocking {
         // Setup: manifest with invalid signature
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createTestManifest(
             files = listOf(bundleFile),
             buildNumber = 200
@@ -248,7 +247,7 @@ class BundleUpdaterTest {
     fun cleanup_returnsNullWhenUpdateAvailable() = runBlocking {
         // Setup: current is 100, server has 200
         val content = "content".toByteArray()
-        val file = TestFixtures.createBundleFile("app.jar", content, FileType.JAR)
+        val file = TestFixtures.createBundleFile("app.jar", content)
 
         // Setup existing bundle at 100
         val currentManifest = TestFixtures.createSignedManifest(
@@ -283,7 +282,7 @@ class BundleUpdaterTest {
     fun cleanup_runsWhenUpToDate() = runBlocking {
         // Setup: current is 100, server also has 100 (up to date)
         val content = "content".toByteArray()
-        val file = TestFixtures.createBundleFile("app.jar", content, FileType.JAR)
+        val file = TestFixtures.createBundleFile("app.jar", content)
 
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(file),
@@ -327,7 +326,7 @@ class BundleUpdaterTest {
 
         // Queue responses - first for checkNow, second for tryCleanupIfUpToDate
         val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent, FileType.JAR)
+        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(bundleFile),
             signer = keyPair.signer,

@@ -2,7 +2,6 @@ package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
 import java.nio.file.Files
@@ -95,14 +94,12 @@ object TestFixtures {
     fun createBundleFile(
         path: String,
         content: ByteArray,
-        type: FileType = FileType.RESOURCE
     ): BundleFile {
         val hash = computeHash(content)
         return BundleFile(
             path = path,
             hash = hash,
             size = content.size.toLong(),
-            type = type
         )
     }
 

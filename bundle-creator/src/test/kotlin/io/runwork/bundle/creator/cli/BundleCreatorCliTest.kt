@@ -146,37 +146,6 @@ class BundleCreatorCliTest {
     }
 
     @Test
-    fun createBundle_detectsFileTypes() {
-        File(inputDir, "app.jar").writeText("JAR content")
-        File(inputDir, "natives").mkdirs()
-        File(inputDir, "natives/lib.dylib").writeText("Native content")
-        File(inputDir, "config.txt").writeText("Config content")
-
-        main(arrayOf(
-            "--input", inputDir.absolutePath,
-            "--output", outputDir.absolutePath,
-            "--platform", "macos-arm64",
-            "--private-key-path", privateKeyFile.absolutePath
-        ))
-
-        val manifest = json.decodeFromString<BundleManifest>(
-            File(outputDir, "manifest.json").readText()
-        )
-
-        val jarFile = manifest.files.find { it.path == "app.jar" }
-        val nativeFile = manifest.files.find { it.path == "natives/lib.dylib" }
-        val resourceFile = manifest.files.find { it.path == "config.txt" }
-
-        assertNotNull(jarFile)
-        assertNotNull(nativeFile)
-        assertNotNull(resourceFile)
-
-        assertEquals(io.runwork.bundle.common.manifest.FileType.JAR, jarFile.type)
-        assertEquals(io.runwork.bundle.common.manifest.FileType.NATIVE, nativeFile.type)
-        assertEquals(io.runwork.bundle.common.manifest.FileType.RESOURCE, resourceFile.type)
-    }
-
-    @Test
     fun createBundle_usesFilePrivateKey() {
         File(inputDir, "test.txt").writeText("Content")
 

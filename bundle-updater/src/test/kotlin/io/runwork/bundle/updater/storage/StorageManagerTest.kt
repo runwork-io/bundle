@@ -1,7 +1,6 @@
 package io.runwork.bundle.updater.storage
 
 import io.runwork.bundle.common.manifest.BundleFile
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.updater.TestFixtures
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -90,7 +89,6 @@ class StorageManagerTest {
                     path = "app.jar",
                     hash = hash,
                     size = content.length.toLong(),
-                    type = FileType.JAR
                 )
             ),
             buildNumber = 42
@@ -119,7 +117,6 @@ class StorageManagerTest {
                     path = "natives/macos/libfoo.dylib",
                     hash = hash,
                     size = content.length.toLong(),
-                    type = FileType.NATIVE
                 )
             ),
             buildNumber = 42
@@ -140,7 +137,7 @@ class StorageManagerTest {
 
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
-                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong(), type = FileType.RESOURCE)
+                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong())
             ),
             buildNumber = 42
         )
@@ -161,7 +158,6 @@ class StorageManagerTest {
                     path = "missing.jar",
                     hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
                     size = 100,
-                    type = FileType.JAR
                 )
             ),
             buildNumber = 42
@@ -220,7 +216,7 @@ class StorageManagerTest {
 
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
-                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong(), type = FileType.RESOURCE)
+                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong())
             ),
             buildNumber = 42
         )
@@ -240,7 +236,7 @@ class StorageManagerTest {
 
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
-                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong(), type = FileType.RESOURCE)
+                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong())
             ),
             buildNumber = 42
         )
@@ -267,7 +263,7 @@ class StorageManagerTest {
 
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
-                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong(), type = FileType.RESOURCE)
+                BundleFile(path = "file.txt", hash = hash, size = content.length.toLong())
             ),
             buildNumber = 42
         )
