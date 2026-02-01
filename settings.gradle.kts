@@ -4,6 +4,7 @@ include("bundle-common")
 include("bundle-updater")
 include("bundle-bootstrap")
 include("bundle-creator")
+include("bundle-creator-gradle-task")
 include("samples")
 
 pluginManagement {
