@@ -53,7 +53,7 @@ suspend fun createBundle() {
         mainClass = "com.myapp.MainKt",
         minShellVersion = 1,
         bundleHash = bundleHash,
-        rootAppUpdateUrl = null, // Optional: URL to update the shell app itself
+        shellUpdateUrl = null, // Optional: URL to update the shell app itself
     )
 
     // Step 4: Sign manifest with Ed25519

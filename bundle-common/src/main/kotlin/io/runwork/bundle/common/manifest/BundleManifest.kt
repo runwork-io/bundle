@@ -26,7 +26,7 @@ data class BundleManifest(
     val minimumShellVersion: Int,
 
     /** URL where users can download an updated shell application (optional) */
-    val rootAppUpdateUrl: String? = null,
+    val shellUpdateUrl: String? = null,
 
     /** All files in the bundle with their paths, hashes, and sizes */
     val files: List<BundleFile>,

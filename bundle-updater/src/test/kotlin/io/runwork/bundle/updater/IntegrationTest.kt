@@ -383,7 +383,7 @@ class IntegrationTest {
             signer = keyPair.signer,
             buildNumber = 42,
             minimumShellVersion = 5, // Requires shell v5
-            rootAppUpdateUrl = "https://example.com/download",
+            shellUpdateUrl = "https://example.com/download",
         )
 
         setupExistingBundle(appDataDir, manifest, mapOf("app.jar" to content))

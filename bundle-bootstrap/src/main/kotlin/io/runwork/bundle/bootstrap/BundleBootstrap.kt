@@ -103,7 +103,7 @@ class BundleBootstrap(
             return BundleValidationResult.ShellUpdateRequired(
                 currentVersion = config.shellVersion,
                 requiredVersion = manifest.minimumShellVersion,
-                updateUrl = manifest.rootAppUpdateUrl,
+                updateUrl = manifest.shellUpdateUrl,
             )
         }
 
