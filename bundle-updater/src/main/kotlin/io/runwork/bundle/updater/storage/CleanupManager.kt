@@ -35,7 +35,8 @@ class CleanupManager(
         val currentBuild = currentManifest.buildNumber
 
         // 1. Clear all temp files (always safe when up-to-date)
-        storageManager.cleanupTemp()
+        // Use unlocked version since we already hold the lock via withStorageLock
+        storageManager.cleanupTempUnlocked()
 
         // 2. Delete old version directories (keep only current)
         val allVersions = storageManager.listVersions()
@@ -44,7 +45,8 @@ class CleanupManager(
 
         for (version in versionsToDelete) {
             try {
-                storageManager.deleteVersionDirectory(version)
+                // Use unlocked version since we already hold the lock via withStorageLock
+                storageManager.deleteVersionDirectoryUnlocked(version)
                 deletedVersions.add(version)
             } catch (e: Exception) {
                 // Log but continue - don't fail cleanup for one bad version

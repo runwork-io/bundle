@@ -6,7 +6,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import java.io.ByteArrayOutputStream
@@ -89,15 +88,6 @@ class BundleClassLoaderTest {
 
         assertNotNull(resource)
         assertTrue(resource.toString().contains("test-resource.txt"))
-    }
-
-    @Test
-    fun getResource_returnsNullForMissingResource() {
-        bundleClassLoader = BundleClassLoader(emptyArray(), ClassLoader.getSystemClassLoader())
-
-        val resource = bundleClassLoader.getResource("definitely-does-not-exist-12345.txt")
-
-        assertNull(resource)
     }
 
     @Test

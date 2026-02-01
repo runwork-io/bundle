@@ -251,14 +251,22 @@ class StorageManager(
      */
     suspend fun deleteVersionDirectory(buildNumber: Long) {
         storageMutex.withLock {
-            withContext(Dispatchers.IO) {
-                val versionDir = versionsDir.resolve(buildNumber.toString())
-                if (!Files.exists(versionDir)) return@withContext
+            deleteVersionDirectoryUnlocked(buildNumber)
+        }
+    }
 
-                Files.walk(versionDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach { Files.delete(it) }
-            }
+    /**
+     * Delete a version directory without acquiring the lock.
+     * Caller must hold the storage lock via [withStorageLock].
+     */
+    internal suspend fun deleteVersionDirectoryUnlocked(buildNumber: Long) {
+        withContext(Dispatchers.IO) {
+            val versionDir = versionsDir.resolve(buildNumber.toString())
+            if (!Files.exists(versionDir)) return@withContext
+
+            Files.walk(versionDir)
+                .sorted(Comparator.reverseOrder())
+                .forEach { Files.delete(it) }
         }
     }
 
@@ -307,16 +315,24 @@ class StorageManager(
      */
     suspend fun cleanupTemp() {
         storageMutex.withLock {
-            withContext(Dispatchers.IO) {
-                if (!Files.exists(tempDir)) return@withContext
+            cleanupTempUnlocked()
+        }
+    }
 
-                Files.list(tempDir).use { stream ->
-                    stream.forEach { file ->
-                        try {
-                            Files.deleteIfExists(file)
-                        } catch (e: Exception) {
-                            // Ignore - file might be in use
-                        }
+    /**
+     * Clean up the temp directory without acquiring the lock.
+     * Caller must hold the storage lock via [withStorageLock].
+     */
+    internal suspend fun cleanupTempUnlocked() {
+        withContext(Dispatchers.IO) {
+            if (!Files.exists(tempDir)) return@withContext
+
+            Files.list(tempDir).use { stream ->
+                stream.forEach { file ->
+                    try {
+                        Files.deleteIfExists(file)
+                    } catch (e: Exception) {
+                        // Ignore - file might be in use
                     }
                 }
             }

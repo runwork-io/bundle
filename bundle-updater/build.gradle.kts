@@ -24,6 +24,8 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(project(":bundle-bootstrap"))
+    testImplementation(project(":bundle-creator"))
 }
 
 tasks.test {

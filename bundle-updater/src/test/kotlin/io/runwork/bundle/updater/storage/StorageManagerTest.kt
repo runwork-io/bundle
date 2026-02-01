@@ -3,6 +3,8 @@ package io.runwork.bundle.updater.storage
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.updater.TestFixtures
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -15,6 +17,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 class StorageManagerTest {
 
@@ -361,5 +364,65 @@ class StorageManagerTest {
 
         assertFalse(Files.exists(temp1))
         assertFalse(Files.exists(temp2))
+    }
+
+    @Test
+    fun concurrentSetCurrentVersion_usesLockCorrectly() = runTest {
+        // Setup: Create two version directories
+        Files.createDirectories(tempDir.resolve("versions/1"))
+        Files.createDirectories(tempDir.resolve("versions/2"))
+
+        // Track execution order to verify mutex serialization
+        val executionOrder = AtomicInteger(0)
+        val operationSequence = mutableListOf<String>()
+
+        // Run two setCurrentVersion calls concurrently
+        val results = listOf(
+            async {
+                storageManager.withStorageLock {
+                    val startOrder = executionOrder.incrementAndGet()
+                    synchronized(operationSequence) {
+                        operationSequence.add("start1:$startOrder")
+                    }
+                    // Small delay to make interleaving more likely if mutex fails
+                    kotlinx.coroutines.delay(10)
+                    val endOrder = executionOrder.incrementAndGet()
+                    synchronized(operationSequence) {
+                        operationSequence.add("end1:$endOrder")
+                    }
+                    "op1"
+                }
+            },
+            async {
+                storageManager.withStorageLock {
+                    val startOrder = executionOrder.incrementAndGet()
+                    synchronized(operationSequence) {
+                        operationSequence.add("start2:$startOrder")
+                    }
+                    // Small delay
+                    kotlinx.coroutines.delay(10)
+                    val endOrder = executionOrder.incrementAndGet()
+                    synchronized(operationSequence) {
+                        operationSequence.add("end2:$endOrder")
+                    }
+                    "op2"
+                }
+            }
+        )
+
+        val completedOps = results.awaitAll()
+
+        // Both operations should complete
+        assertEquals(2, completedOps.size)
+
+        // Verify mutex serialization: operations shouldn't interleave
+        // Valid sequences: [start1, end1, start2, end2] or [start2, end2, start1, end1]
+        assertEquals(4, operationSequence.size)
+
+        // Parse the sequence to verify no interleaving
+        val sequence = operationSequence.map { it.split(":")[0] }
+        val isValid = (sequence == listOf("start1", "end1", "start2", "end2")) ||
+                      (sequence == listOf("start2", "end2", "start1", "end1"))
+        assertTrue(isValid, "Mutex should serialize operations. Actual sequence: $operationSequence")
     }
 }
