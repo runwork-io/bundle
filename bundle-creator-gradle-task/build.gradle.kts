@@ -48,6 +48,10 @@ val createClasspathManifest by tasks.registering {
 tasks.test {
     useJUnitPlatform()
     dependsOn(createClasspathManifest)
+
+    // Override the default 20s timeout - Gradle TestKit tests run nested builds
+    // which take significantly longer, especially on CI without caches
+    systemProperty("junit.jupiter.execution.timeout.default", "120s")
 }
 
 val publishVersion: String? = providers.gradleProperty("VERSION_NAME").orNull
