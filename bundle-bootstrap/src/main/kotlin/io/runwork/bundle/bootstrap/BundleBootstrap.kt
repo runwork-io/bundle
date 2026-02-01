@@ -129,7 +129,7 @@ class BundleBootstrap(
             manifest.files.map { file ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
-                        verifyAndRepairFile(file, versionDir)
+                        verifyFileHashAndLink(file, versionDir)
                     }
                 }
             }.awaitAll().filterNotNull()
@@ -271,7 +271,7 @@ class BundleBootstrap(
      *
      * @return VerificationFailure if verification failed, null if successful (including after repair)
      */
-    private suspend fun verifyAndRepairFile(
+    private suspend fun verifyFileHashAndLink(
         file: io.runwork.bundle.common.manifest.BundleFile,
         versionDir: Path
     ): VerificationFailure? {
