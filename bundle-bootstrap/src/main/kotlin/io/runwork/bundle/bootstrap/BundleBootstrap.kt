@@ -178,6 +178,7 @@ class BundleBootstrap(
         val entryClass = try {
             bundleClassLoader.loadClass(mainClassName)
         } catch (e: ClassNotFoundException) {
+            bundleClassLoader.close()
             throw BundleLoadException("Main class not found: $mainClassName", e)
         }
 
@@ -185,6 +186,7 @@ class BundleBootstrap(
         val mainMethod = try {
             entryClass.getMethod("main", Array<String>::class.java)
         } catch (e: NoSuchMethodException) {
+            bundleClassLoader.close()
             throw BundleLoadException(
                 "Main class $mainClassName must have a static main(Array<String>) method",
                 e
@@ -193,6 +195,7 @@ class BundleBootstrap(
 
         // Validate that main is static
         if (!Modifier.isStatic(mainMethod.modifiers)) {
+            bundleClassLoader.close()
             throw BundleLoadException(
                 "Main class $mainClassName.main() must be static (use @JvmStatic annotation)"
             )

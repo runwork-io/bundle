@@ -1,6 +1,7 @@
 package io.runwork.bundle.bootstrap.loader
 
 import io.runwork.bundle.common.manifest.BundleManifest
+import java.io.Closeable
 import java.nio.file.Path
 
 /**
@@ -34,7 +35,16 @@ data class LoadedBundle(
      * @param callback Function called with the exception if main() threw, or null for clean exit
      */
     val onExit: ((Throwable?) -> Unit) -> Unit,
-)
+) : Closeable {
+    /**
+     * Close the bundle's classloader, releasing file handles.
+     * This should be called when the bundle is no longer needed.
+     * On Windows, failing to close may prevent JAR files from being deleted.
+     */
+    override fun close() {
+        classLoader.close()
+    }
+}
 
 /** Exception thrown when bundle loading fails. */
 class BundleLoadException(message: String, cause: Throwable? = null) : Exception(message, cause)
