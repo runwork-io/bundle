@@ -12,7 +12,7 @@ import java.nio.file.Path
  */
 class CleanupManager(
     private val storageManager: StorageManager,
-    @Suppress("unused") private val appDataDir: Path,
+    @Suppress("unused") private val bundleDir: Path,
 ) {
     /**
      * Perform cleanup of old versions and orphaned CAS files.

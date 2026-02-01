@@ -13,6 +13,9 @@ data class BundleLaunchConfig(
     /** Absolute path to the application data directory containing bundle storage */
     val appDataDir: String,
 
+    /** Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string means files are directly in appDataDir. */
+    val bundleSubdirectory: String = "bundle",
+
     /** Base URL for fetching manifests and bundle files */
     val baseUrl: String,
 

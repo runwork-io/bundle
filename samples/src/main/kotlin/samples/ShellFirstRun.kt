@@ -20,10 +20,11 @@ suspend fun shellFirstRun() {
 
     val bootstrapConfig = BundleBootstrapConfig(
         appDataDir = appDataDir,
+        bundleSubdirectory = "bundle", // Bundle files stored in ~/.myapp/bundle/
         baseUrl = "https://updates.myapp.com",
         publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
-        platform = Platform.current, // e.g., "macos-arm64"
         shellVersion = 1,
+        platform = Platform.current, // e.g., "macos-arm64"
     )
 
     val bootstrap = BundleBootstrap(bootstrapConfig)
@@ -36,10 +37,11 @@ suspend fun shellFirstRun() {
             // Step 2: Download initial bundle
             val updaterConfig = BundleUpdaterConfig(
                 appDataDir = appDataDir,
+                bundleSubdirectory = bootstrapConfig.bundleSubdirectory,
                 baseUrl = "https://updates.myapp.com",
                 publicKey = bootstrapConfig.publicKey,
-                platform = bootstrapConfig.platform,
                 currentBuildNumber = 0, // No bundle exists yet
+                platform = bootstrapConfig.platform,
             )
             val updater = BundleUpdater(updaterConfig)
 

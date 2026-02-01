@@ -357,6 +357,7 @@ class BundleUpdaterTest {
     private fun createUpdater(currentBuildNumber: Long): BundleUpdater {
         val config = BundleUpdaterConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
             currentBuildNumber = currentBuildNumber,
