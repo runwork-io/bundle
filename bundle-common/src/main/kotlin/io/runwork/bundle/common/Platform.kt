@@ -20,11 +20,11 @@ enum class Os(val id: String) {
         }
 
         /**
-         * Detect the current OS from system properties.
+         * The current OS, detected from system properties.
          */
-        fun current(): Os {
+        val current: Os by lazy {
             val osName = System.getProperty("os.name").lowercase()
-            return when {
+            when {
                 osName.contains("mac") || osName.contains("darwin") -> MACOS
                 osName.contains("win") -> WINDOWS
                 else -> LINUX
@@ -52,11 +52,11 @@ enum class Architecture(val id: String) {
         }
 
         /**
-         * Detect the current architecture from system properties.
+         * The current architecture, detected from system properties.
          */
-        fun current(): Architecture {
+        val current: Architecture by lazy {
             val arch = System.getProperty("os.arch")
-            return when {
+            when {
                 arch == "aarch64" || arch == "arm64" -> ARM64
                 arch.contains("64") || arch == "amd64" -> X86_64
                 else -> throw IllegalArgumentException("Unsupported architecture: $arch")
@@ -96,11 +96,13 @@ data class Platform(
         }
 
         /**
-         * Detect the current platform from system properties.
+         * The current platform, detected from system properties.
          */
-        fun current(): Platform = Platform(
-            os = Os.current(),
-            architecture = Architecture.current(),
-        )
+        val current: Platform by lazy {
+            Platform(
+                os = Os.current,
+                architecture = Architecture.current,
+            )
+        }
     }
 }

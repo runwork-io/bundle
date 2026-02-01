@@ -26,7 +26,7 @@ data class BundleUpdaterConfig(
     val currentBuildNumber: Long,
 
     /** Platform (OS and architecture) */
-    val platform: Platform = Platform.current(),
+    val platform: Platform = Platform.current,
 
     /** Interval between automatic update checks when running as a background service */
     val checkInterval: Duration = 6.hours,
@@ -51,7 +51,7 @@ data class BundleUpdaterConfig(
         baseUrl: String,
         publicKey: String,
         currentBuildNumber: Long,
-        platform: Platform = Platform.current(),
+        platform: Platform = Platform.current,
         checkInterval: Duration = 6.hours,
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),

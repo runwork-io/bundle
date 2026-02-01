@@ -74,7 +74,7 @@ class PlatformTest {
 
     @Test
     fun `Platform current returns a valid platform`() {
-        val platform = Platform.current()
+        val platform = Platform.current
         // Just verify it returns something valid
         assert(platform.os in Os.entries)
         assert(platform.architecture in Architecture.entries)
