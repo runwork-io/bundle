@@ -56,7 +56,8 @@ val bootstrapConfig = BundleBootstrapConfig(
     appId = "com.example.myapp",
     baseUrl = "https://cdn.example.com/bundles",
     publicKey = "your-ed25519-public-key",
-    shellVersion = 1
+    shellVersion = 1,
+    mainClass = "com.example.Main",
 )
 
 // Or specify an explicit storage path
@@ -64,7 +65,8 @@ val bootstrapConfig = BundleBootstrapConfig(
     appDataDir = Path("/custom/storage/path"),
     baseUrl = "https://cdn.example.com/bundles",
     publicKey = "your-ed25519-public-key",
-    shellVersion = 1
+    shellVersion = 1,
+    mainClass = "com.example.Main",
 )
 
 val bootstrap = BundleBootstrap(bootstrapConfig)

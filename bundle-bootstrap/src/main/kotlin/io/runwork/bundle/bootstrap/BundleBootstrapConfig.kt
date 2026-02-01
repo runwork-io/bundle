@@ -29,7 +29,7 @@ data class BundleBootstrapConfig(
     val platform: Platform = Platform.current,
 
     /** Fully qualified main class name to invoke in the bundle */
-    val mainClass: String = "io.runwork.app.Main",
+    val mainClass: String,
 ) {
     /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
     val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
@@ -55,9 +55,9 @@ data class BundleBootstrapConfig(
         baseUrl: String,
         publicKey: String,
         shellVersion: Int,
+        mainClass: String,
         bundleSubdirectory: String = "bundle",
         platform: Platform = Platform.current,
-        mainClass: String = "io.runwork.app.Main",
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
         bundleSubdirectory = bundleSubdirectory,

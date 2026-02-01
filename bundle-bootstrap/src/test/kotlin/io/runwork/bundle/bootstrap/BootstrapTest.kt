@@ -276,7 +276,7 @@ class BootstrapTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = shellVersion,
             platform = Platform.fromString(platform),
-            mainClass = "io.runwork.TestMain"
+            mainClass = "io.runwork.TestMain",
         )
         return BundleBootstrap(config)
     }

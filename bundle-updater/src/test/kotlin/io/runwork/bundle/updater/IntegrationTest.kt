@@ -95,6 +95,7 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = 1,
             platform = Platform.fromString("macos-arm64"),
+            mainClass = "io.test.TestMain",
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
 
@@ -164,6 +165,7 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = 1,
             platform = Platform.fromString("macos-arm64"),
+            mainClass = "io.test.TestMain",
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
         val initialResult = bootstrap.validate()
@@ -330,6 +332,7 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = 1,
             platform = Platform.fromString("macos-arm64"),
+            mainClass = "io.test.TestMain",
         )
         val bootstrap = BundleBootstrap(config)
 
@@ -367,6 +370,7 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = 1,
             platform = Platform.fromString("macos-arm64"),
+            mainClass = "io.test.TestMain",
         )
         val bootstrap = BundleBootstrap(config)
 
@@ -401,6 +405,7 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             shellVersion = 1, // Running shell v1
             platform = Platform.fromString("macos-arm64"),
+            mainClass = "io.test.TestMain",
         )
         val bootstrap = BundleBootstrap(config)
 
