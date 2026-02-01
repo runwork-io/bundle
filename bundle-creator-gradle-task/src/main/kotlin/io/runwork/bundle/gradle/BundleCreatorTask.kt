@@ -39,6 +39,7 @@ import java.util.zip.ZipOutputStream
  *     inputDirectory.set(layout.buildDirectory.dir("install/myapp"))
  *     outputDirectory.set(layout.buildDirectory.dir("bundle"))
  *     mainClass.set("com.myapp.MainKt")
+ *     buildNumber.set(System.currentTimeMillis())  // Or use CI build number
  *
  *     // Preferred: use Gradle's environment variable provider
  *     privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
@@ -77,10 +78,9 @@ abstract class BundleCreatorTask : DefaultTask() {
 
     /**
      * Build number for the manifest.
-     * Defaults to System.currentTimeMillis().
+     * This is required and should be set by your CI system.
      */
     @get:Input
-    @get:Optional
     abstract val buildNumber: Property<Long>
 
     /**
@@ -167,12 +167,8 @@ abstract class BundleCreatorTask : DefaultTask() {
             PlatformPaths.getPlatform().toString()
         }
 
-        // Determine build number
-        val build = if (buildNumber.isPresent) {
-            buildNumber.get()
-        } else {
-            System.currentTimeMillis()
-        }
+        // Get build number (required)
+        val build = buildNumber.get()
 
         // Get min shell version
         val minShell = if (minShellVersion.isPresent) {

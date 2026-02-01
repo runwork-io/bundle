@@ -178,7 +178,7 @@ bundle/
 | `outputDirectory` | `DirectoryProperty` | Yes | - | Output for manifest.json, bundle.zip, files/ |
 | `mainClass` | `Property<String>` | Yes | - | Fully qualified main class |
 | `platform` | `Property<String>` | No | Auto-detect | Platform ID (e.g., "macos-arm64") |
-| `buildNumber` | `Property<Long>` | No | `System.currentTimeMillis()` | Build number |
+| `buildNumber` | `Property<Long>` | Yes | - | Build number (set by CI) |
 | `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
 | `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
 | `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
@@ -326,6 +326,7 @@ tasks.register<BundleCreatorTask>("createBundle") {
     inputDirectory.set(layout.buildDirectory.dir("install/myapp"))
     outputDirectory.set(layout.buildDirectory.dir("bundle"))
     mainClass.set("com.myapp.MainKt")
+    buildNumber.set(System.currentTimeMillis())  // Or use CI build number
     privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
     dependsOn("installDist")
 }

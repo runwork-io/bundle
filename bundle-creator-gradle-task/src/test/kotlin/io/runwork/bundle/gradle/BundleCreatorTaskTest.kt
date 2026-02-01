@@ -162,41 +162,6 @@ class BundleCreatorTaskTest {
     }
 
     @Test
-    fun taskUsesDefaultBuildNumber() {
-        File(inputDir, "test.txt").writeText("Content")
-
-        writeBuildFile(
-            """
-            tasks.register<BundleCreatorTask>("createBundle") {
-                inputDirectory.set(file("input"))
-                outputDirectory.set(layout.buildDirectory.dir("bundle"))
-                mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
-                privateKeyFile.set(file("private.key"))
-            }
-            """.trimIndent()
-        )
-
-        val beforeTime = System.currentTimeMillis()
-
-        val result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withArguments("createBundle", "--stacktrace")
-            .build()
-
-        val afterTime = System.currentTimeMillis()
-
-        assertEquals(TaskOutcome.SUCCESS, result.task(":createBundle")?.outcome)
-
-        val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
-        val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
-
-        // Build number should be a timestamp between before and after
-        assertTrue(manifest.buildNumber >= beforeTime)
-        assertTrue(manifest.buildNumber <= afterTime)
-    }
-
-    @Test
     fun taskUsesPrivateKeyFromEnvVar() {
         File(inputDir, "test.txt").writeText("Content")
 
@@ -210,6 +175,7 @@ class BundleCreatorTaskTest {
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
                 platform.set("macos-arm64")
+                buildNumber.set(1L)
                 privateKeyEnvVar.set("TEST_BUNDLE_KEY")
             }
             """.trimIndent()
@@ -250,6 +216,7 @@ class BundleCreatorTaskTest {
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
                 platform.set("macos-arm64")
+                buildNumber.set(1L)
                 // Use the privateKey property directly with a provider
                 privateKey.set(providers.gradleProperty("bundlePrivateKey"))
             }
@@ -317,6 +284,7 @@ class BundleCreatorTaskTest {
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
                 platform.set("macos-arm64")
+                buildNumber.set(1L)
                 // No private key set
             }
             """.trimIndent()
@@ -361,6 +329,7 @@ class BundleCreatorTaskTest {
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
                 platform.set("macos-arm64")
+                buildNumber.set(1L)
                 privateKeyFile.set(file("private.key"))
             }
             """.trimIndent()
@@ -391,6 +360,7 @@ class BundleCreatorTaskTest {
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
                 platform.set("macos-arm64")
+                buildNumber.set(1L)
                 privateKeyFile.set(file("private.key"))
             }
             """.trimIndent()
