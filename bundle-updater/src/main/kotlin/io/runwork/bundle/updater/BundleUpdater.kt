@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference
  * - Update-first cleanup: Never deletes files until fully up-to-date
  */
 class BundleUpdater(
-    private val config: UpdaterConfig
+    private val config: BundleUpdaterConfig
 ) : Closeable {
     private val storageManager = StorageManager(config.appDataDir)
     private val cleanupManager = CleanupManager(storageManager, config.appDataDir)
@@ -45,7 +45,7 @@ class BundleUpdater(
     private val signatureVerifier = SignatureVerifier(config.publicKey)
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val currentState = AtomicReference<UpdaterState>(UpdaterState.Idle)
+    private val currentState = AtomicReference<BundleUpdaterState>(BundleUpdaterState.Idle)
 
     // ============ ONE-SHOT API (used by shell for initial download) ============
 
@@ -109,9 +109,9 @@ class BundleUpdater(
      *
      * @return Flow of update events
      */
-    fun start(): Flow<UpdateEvent> = channelFlow {
+    fun start(): Flow<BundleUpdateEvent> = channelFlow {
         // Initial cleanup on startup (only if up-to-date)
-        tryCleanupIfUpToDate()?.let { send(UpdateEvent.CleanupComplete(it)) }
+        tryCleanupIfUpToDate()?.let { send(BundleUpdateEvent.CleanupComplete(it)) }
 
         while (isActive) {
             checkAndDownloadUpdate()
@@ -126,31 +126,31 @@ class BundleUpdater(
      */
     suspend fun checkNow(): UpdateCheckResult {
         return try {
-            currentState.set(UpdaterState.Checking)
+            currentState.set(BundleUpdaterState.Checking)
 
             val manifest = when (val result = fetchAndVerifyManifest()) {
                 is ManifestFetchResult.Success -> result.manifest
                 is ManifestFetchResult.NetworkError -> {
                     val error = UpdateError(result.message, result.cause)
-                    currentState.set(UpdaterState.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
                     return UpdateCheckResult.Failed(result.message, result.cause)
                 }
                 is ManifestFetchResult.SignatureFailure -> {
                     val error = UpdateError(result.message)
-                    currentState.set(UpdaterState.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
                     return UpdateCheckResult.Failed(result.message)
                 }
                 is ManifestFetchResult.PlatformMismatch -> {
                     val message = "Platform mismatch: expected ${result.expected}, got ${result.actual}"
                     val error = UpdateError(message)
-                    currentState.set(UpdaterState.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
                     return UpdateCheckResult.Failed(message)
                 }
             }
 
             // Check for downgrade
             if (manifest.buildNumber <= config.currentBuildNumber) {
-                currentState.set(UpdaterState.Idle)
+                currentState.set(BundleUpdaterState.Idle)
                 tryCleanupIfUpToDate()
                 return UpdateCheckResult.UpToDate
             }
@@ -160,7 +160,7 @@ class BundleUpdater(
 
             val info = when (strategy) {
                 is DownloadStrategy.NoDownloadNeeded -> {
-                    currentState.set(UpdaterState.Idle)
+                    currentState.set(BundleUpdaterState.Idle)
                     return UpdateCheckResult.UpToDate
                 }
                 is DownloadStrategy.FullBundle -> UpdateInfo(
@@ -177,11 +177,11 @@ class BundleUpdater(
                 )
             }
 
-            currentState.set(UpdaterState.Idle)
+            currentState.set(BundleUpdaterState.Idle)
             UpdateCheckResult.UpdateAvailable(info)
         } catch (e: Exception) {
             val error = UpdateError(e.message ?: "Check failed", e)
-            currentState.set(UpdaterState.Error(error))
+            currentState.set(BundleUpdaterState.Error(error))
             UpdateCheckResult.Failed(e.message ?: "Check failed", e)
         }
     }
@@ -189,7 +189,7 @@ class BundleUpdater(
     /**
      * Get current state.
      */
-    fun getState(): UpdaterState = currentState.get()
+    fun getState(): BundleUpdaterState = currentState.get()
 
     // ============ SHARED API ============
 
@@ -278,40 +278,40 @@ class BundleUpdater(
         }
     }
 
-    private suspend fun ProducerScope<UpdateEvent>.checkAndDownloadUpdate() {
+    private suspend fun ProducerScope<BundleUpdateEvent>.checkAndDownloadUpdate() {
         try {
-            currentState.set(UpdaterState.Checking)
-            send(UpdateEvent.Checking)
+            currentState.set(BundleUpdaterState.Checking)
+            send(BundleUpdateEvent.Checking)
 
             val manifest = when (val result = fetchAndVerifyManifest()) {
                 is ManifestFetchResult.Success -> result.manifest
                 is ManifestFetchResult.NetworkError -> {
                     val error = UpdateError(result.message, result.cause)
-                    currentState.set(UpdaterState.Error(error))
-                    send(UpdateEvent.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
+                    send(BundleUpdateEvent.Error(error))
                     return
                 }
                 is ManifestFetchResult.SignatureFailure -> {
                     val error = UpdateError(result.message)
-                    currentState.set(UpdaterState.Error(error))
-                    send(UpdateEvent.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
+                    send(BundleUpdateEvent.Error(error))
                     return
                 }
                 is ManifestFetchResult.PlatformMismatch -> {
                     val message = "Platform mismatch: expected ${result.expected}, got ${result.actual}"
                     val error = UpdateError(message)
-                    currentState.set(UpdaterState.Error(error))
-                    send(UpdateEvent.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
+                    send(BundleUpdateEvent.Error(error))
                     return
                 }
             }
 
             // Check for downgrade
             if (manifest.buildNumber <= config.currentBuildNumber) {
-                currentState.set(UpdaterState.Idle)
-                send(UpdateEvent.UpToDate)
+                currentState.set(BundleUpdaterState.Idle)
+                send(BundleUpdateEvent.UpToDate)
                 // Up to date - run cleanup
-                tryCleanupIfUpToDate()?.let { send(UpdateEvent.CleanupComplete(it)) }
+                tryCleanupIfUpToDate()?.let { send(BundleUpdateEvent.CleanupComplete(it)) }
                 return
             }
 
@@ -321,8 +321,8 @@ class BundleUpdater(
             if (strategy is DownloadStrategy.NoDownloadNeeded) {
                 // Files already in CAS, just finalize
                 finalizeUpdate(manifest)
-                currentState.set(UpdaterState.Ready(manifest.buildNumber))
-                send(UpdateEvent.UpdateReady(manifest.buildNumber))
+                currentState.set(BundleUpdaterState.Ready(manifest.buildNumber))
+                send(BundleUpdateEvent.UpdateReady(manifest.buildNumber))
                 return
             }
 
@@ -342,37 +342,37 @@ class BundleUpdater(
                 )
                 is DownloadStrategy.NoDownloadNeeded -> return // Already handled above
             }
-            send(UpdateEvent.UpdateAvailable(info))
+            send(BundleUpdateEvent.UpdateAvailable(info))
 
             // Download
             val result = downloadManager.downloadBundle(manifest) { progress ->
-                currentState.set(UpdaterState.Downloading(progress))
-                trySend(UpdateEvent.Downloading(progress))
+                currentState.set(BundleUpdaterState.Downloading(progress))
+                trySend(BundleUpdateEvent.Downloading(progress))
             }
 
             when (result) {
                 is DownloadResult.Success -> {
                     finalizeUpdate(manifest)
-                    currentState.set(UpdaterState.Ready(manifest.buildNumber))
-                    send(UpdateEvent.UpdateReady(manifest.buildNumber))
+                    currentState.set(BundleUpdaterState.Ready(manifest.buildNumber))
+                    send(BundleUpdateEvent.UpdateReady(manifest.buildNumber))
                 }
                 is DownloadResult.AlreadyUpToDate -> {
-                    currentState.set(UpdaterState.Idle)
-                    send(UpdateEvent.UpToDate)
+                    currentState.set(BundleUpdaterState.Idle)
+                    send(BundleUpdateEvent.UpToDate)
                 }
                 is DownloadResult.Failure -> {
                     val error = UpdateError(result.error, result.cause)
-                    currentState.set(UpdaterState.Error(error))
-                    send(UpdateEvent.Error(error))
+                    currentState.set(BundleUpdaterState.Error(error))
+                    send(BundleUpdateEvent.Error(error))
                 }
                 is DownloadResult.Cancelled -> {
-                    currentState.set(UpdaterState.Idle)
+                    currentState.set(BundleUpdaterState.Idle)
                 }
             }
         } catch (e: Exception) {
             val error = UpdateError(e.message ?: "Update failed", e)
-            currentState.set(UpdaterState.Error(error))
-            send(UpdateEvent.Error(error))
+            currentState.set(BundleUpdaterState.Error(error))
+            send(BundleUpdateEvent.Error(error))
         }
     }
 

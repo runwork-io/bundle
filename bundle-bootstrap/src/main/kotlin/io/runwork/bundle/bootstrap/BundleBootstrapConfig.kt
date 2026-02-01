@@ -3,11 +3,11 @@ package io.runwork.bundle.bootstrap
 import java.nio.file.Path
 
 /**
- * Configuration for the Bootstrap.
+ * Configuration for [BundleBootstrap].
  *
  * Provided by the shell application at startup.
  */
-data class BootstrapConfig(
+data class BundleBootstrapConfig(
     /** Absolute path to the application data directory containing bundle storage */
     val appDataDir: Path,
 

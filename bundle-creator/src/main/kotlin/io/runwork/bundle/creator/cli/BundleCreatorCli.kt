@@ -5,7 +5,7 @@ import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.storage.PlatformPaths
 import io.runwork.bundle.common.verification.HashVerifier
-import io.runwork.bundle.creator.ManifestSigner
+import io.runwork.bundle.creator.BundleManifestSigner
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -205,7 +205,7 @@ private fun parseArgs(args: Array<String>): CliConfig {
 }
 
 private fun generateKeys() {
-    val (privateKey, publicKey) = ManifestSigner.generateKeyPair()
+    val (privateKey, publicKey) = BundleManifestSigner.generateKeyPair()
 
     println("Ed25519 Key Pair Generated")
     println("==========================")
@@ -234,7 +234,7 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
         require(config.inputDir.exists()) { "Input directory does not exist: ${config.inputDir}" }
 
         // 2. Load private key
-        val signer = ManifestSigner.fromBase64(config.privateKeyBase64)
+        val signer = BundleManifestSigner.fromBase64(config.privateKeyBase64)
 
         // 3. Collect all files and compute hashes
         val files = collectFiles()

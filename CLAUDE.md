@@ -85,18 +85,18 @@ bundle/
 │
 ├── bundle-bootstrap/                   # Validation and launch
 │   └── src/main/kotlin/io/runwork/bundle/bootstrap/
-│       ├── Bootstrap.kt                # Main orchestrator (validate/launch)
-│       ├── BootstrapConfig.kt          # Shell-provided config
-│       ├── ValidationResult.kt         # Validation outcomes
+│       ├── BundleBootstrap.kt          # Main orchestrator (validate/launch)
+│       ├── BundleBootstrapConfig.kt    # Shell-provided config
+│       ├── BundleValidationResult.kt   # Validation outcomes
 │       └── loader/
 │           ├── BundleClassLoader.kt    # Child-first classloader
 │           └── LoadedBundle.kt         # Launched bundle handle
 │
 ├── bundle-updater/                     # Download and update
 │   └── src/main/kotlin/io/runwork/bundle/updater/
-│       ├── Updater.kt                  # Main API (one-shot + background)
-│       ├── UpdaterConfig.kt            # Runtime config
-│       ├── UpdaterCallbacks.kt         # Event callbacks
+│       ├── BundleUpdater.kt            # Main API (one-shot + background)
+│       ├── BundleUpdaterConfig.kt      # Runtime config
+│       ├── BundleUpdateEvent.kt        # Update events
 │       ├── download/
 │       │   ├── DownloadManager.kt      # HTTP client, file downloads
 │       │   ├── DownloadProgress.kt     # Progress reporting
@@ -107,9 +107,9 @@ bundle/
 │
 └── bundle-creator/                     # CI tooling
     └── src/main/kotlin/io/runwork/bundle/creator/
-        ├── ManifestSigner.kt           # Ed25519 signing
+        ├── BundleManifestSigner.kt     # Ed25519 signing
         ├── BundlePackager.kt           # Creates bundle.zip
-        ├── ManifestBuilder.kt          # Builds manifest from directory
+        ├── BundleManifestBuilder.kt    # Builds manifest from directory
         └── cli/
             └── BundleCreatorCli.kt     # CLI entry point
 ```
@@ -128,14 +128,14 @@ bundle/
 ### bundle-bootstrap
 | Class | Purpose |
 |-------|---------|
-| `Bootstrap` | Main orchestrator - validate() then launch() |
+| `BundleBootstrap` | Main orchestrator - validate() then launch() |
 | `BundleClassLoader` | Child-first classloader for bundle isolation |
 | `LoadedBundle` | Handle to a running bundle with message bridge |
 
 ### bundle-updater
 | Class | Purpose |
 |-------|---------|
-| `Updater` | Main API - downloadLatest() for shell, start() for background updates |
+| `BundleUpdater` | Main API - downloadLatest() for shell, start() for background updates |
 | `StorageManager` | Version lifecycle - prepareVersion(), setCurrentVersion() |
 | `DownloadManager` | HTTP downloads - downloadBundle(), fetchManifest() |
 | `UpdateDecider` | Strategy selection - FullBundle, Incremental, or NoDownloadNeeded |
@@ -144,8 +144,8 @@ bundle/
 ### bundle-creator
 | Class | Purpose |
 |-------|---------|
-| `ManifestSigner` | Ed25519 signing of manifests |
-| `ManifestBuilder` | Builds manifest from directory contents |
+| `BundleManifestSigner` | Ed25519 signing of manifests |
+| `BundleManifestBuilder` | Builds manifest from directory contents |
 | `BundlePackager` | Creates bundle.zip from directory |
 
 ## Storage Layout
@@ -182,7 +182,7 @@ appDataDir/
 
 ### Error Handling
 - Retry logic with exponential backoff for network failures
-- Sealed classes for result types (`UpdateCheckResult`, `ValidationResult`, etc.)
+- Sealed classes for result types (`UpdateCheckResult`, `BundleValidationResult`, etc.)
 - Signature failures are retried (could be CDN corruption)
 
 ### Platform Conventions
@@ -227,14 +227,14 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 ## Data Flow
 
 ### Shell Startup (no bundle)
-1. `Bootstrap.validate()` → returns `NoBundleExists`
+1. `BundleBootstrap.validate()` → returns `NoBundleExists`
 2. `Updater.downloadLatest()` → fetches manifest, downloads files to CAS, prepares version
-3. `Bootstrap.validate()` → returns `Valid`
-4. `Bootstrap.launch()` → creates classloader, invokes main()
+3. `BundleBootstrap.validate()` → returns `Valid`
+4. `BundleBootstrap.launch()` → creates classloader, invokes main()
 
 ### Shell Startup (bundle exists)
-1. `Bootstrap.validate()` → verifies signature and file hashes → returns `Valid`
-2. `Bootstrap.launch()` → creates classloader, invokes main()
+1. `BundleBootstrap.validate()` → verifies signature and file hashes → returns `Valid`
+2. `BundleBootstrap.launch()` → creates classloader, invokes main()
 
 ### Bundle Self-Update (runtime)
 1. `Updater.start(callbacks)` → starts background coroutine
@@ -247,6 +247,8 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 - Uses `MockWebServer` for HTTP testing
 - `TestFixtures` object provides utilities for creating test data
 - All async tests wrapped in `runTest { }`
+- **JUnit is configured with a 20-second default timeout for all tests** (via `junit.jupiter.execution.timeout.default` in root `build.gradle.kts`)
+- **Never use `Thread.sleep()` or fixed `delay()` in tests** - tests should use proper synchronization primitives (e.g., `CompletableDeferred`, `Channel`, `Mutex`, `CountDownLatch`) or event-based approaches to avoid brittleness
 - CI runs on Ubuntu and Windows with JDK 17
 
 ## Dependencies
@@ -270,5 +272,5 @@ Look at `UpdateDecider.decide()` which calculates effective cost:
 
 ### Adding New Verification
 1. Add verification logic to `StorageManager.verifyVersion()` or create new verifier
-2. Integrate into `Bootstrap.validate()`
+2. Integrate into `BundleBootstrap.validate()`
 3. Add appropriate test coverage

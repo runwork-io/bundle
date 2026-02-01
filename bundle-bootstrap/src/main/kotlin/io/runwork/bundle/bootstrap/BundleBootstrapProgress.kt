@@ -3,22 +3,22 @@ package io.runwork.bundle.bootstrap
 /**
  * Progress information during bootstrap validation.
  */
-sealed class BootstrapProgress {
+sealed class BundleBootstrapProgress {
     /** Loading and parsing the manifest file */
-    data object LoadingManifest : BootstrapProgress()
+    data object LoadingManifest : BundleBootstrapProgress()
 
     /** Verifying the manifest signature */
-    data object VerifyingSignature : BootstrapProgress()
+    data object VerifyingSignature : BundleBootstrapProgress()
 
     /** Verifying file hashes */
     data class VerifyingFiles(
         val filesVerified: Int,
         val totalFiles: Int,
-    ) : BootstrapProgress() {
+    ) : BundleBootstrapProgress() {
         val percentComplete: Float
             get() = if (totalFiles > 0) filesVerified.toFloat() / totalFiles else 0f
     }
 
     /** Validation complete */
-    data object Complete : BootstrapProgress()
+    data object Complete : BundleBootstrapProgress()
 }

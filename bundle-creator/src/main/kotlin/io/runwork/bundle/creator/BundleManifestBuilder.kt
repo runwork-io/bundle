@@ -10,7 +10,7 @@ import java.time.Instant
 /**
  * Builds a BundleManifest from a directory of files.
  */
-class ManifestBuilder {
+class BundleManifestBuilder {
 
     /**
      * Build a manifest from an input directory.

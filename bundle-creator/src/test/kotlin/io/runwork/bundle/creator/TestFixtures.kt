@@ -68,7 +68,7 @@ object TestFixtures {
      */
     fun createSignedManifest(
         files: List<BundleFile>,
-        signer: ManifestSigner,
+        signer: BundleManifestSigner,
         buildNumber: Long = 1,
         platform: String = "macos-arm64",
         mainClass: String = "io.runwork.TestMain",
@@ -82,9 +82,9 @@ object TestFixtures {
     /**
      * Generate a test key pair for signing/verification.
      */
-    fun generateTestKeyPair(): Pair<ManifestSigner, SignatureVerifier> {
-        val (privateKey, publicKey) = ManifestSigner.generateKeyPair()
-        val signer = ManifestSigner.fromBase64(privateKey)
+    fun generateTestKeyPair(): Pair<BundleManifestSigner, SignatureVerifier> {
+        val (privateKey, publicKey) = BundleManifestSigner.generateKeyPair()
+        val signer = BundleManifestSigner.fromBase64(privateKey)
         val verifier = SignatureVerifier(publicKey)
         return Pair(signer, verifier)
     }

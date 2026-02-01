@@ -6,27 +6,27 @@ import io.runwork.bundle.updater.result.CleanupResult
 /**
  * Events emitted by the [BundleUpdater] when running as a background service.
  */
-sealed class UpdateEvent {
+sealed class BundleUpdateEvent {
     /** Currently checking for updates */
-    data object Checking : UpdateEvent()
+    data object Checking : BundleUpdateEvent()
 
     /** A new update is available */
-    data class UpdateAvailable(val info: UpdateInfo) : UpdateEvent()
+    data class UpdateAvailable(val info: UpdateInfo) : BundleUpdateEvent()
 
     /** Download progress update */
-    data class Downloading(val progress: DownloadProgress) : UpdateEvent()
+    data class Downloading(val progress: DownloadProgress) : BundleUpdateEvent()
 
     /** Update downloaded and ready to apply */
-    data class UpdateReady(val newBuildNumber: Long) : UpdateEvent()
+    data class UpdateReady(val newBuildNumber: Long) : BundleUpdateEvent()
 
     /** An error occurred (may be recoverable) */
-    data class Error(val error: UpdateError) : UpdateEvent()
+    data class Error(val error: UpdateError) : BundleUpdateEvent()
 
     /** Cleanup cycle completed */
-    data class CleanupComplete(val result: CleanupResult) : UpdateEvent()
+    data class CleanupComplete(val result: CleanupResult) : BundleUpdateEvent()
 
     /** Currently up to date, waiting for next check */
-    data object UpToDate : UpdateEvent()
+    data object UpToDate : BundleUpdateEvent()
 }
 
 /**

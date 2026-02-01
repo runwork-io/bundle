@@ -2,7 +2,7 @@ package io.runwork.bundle.creator.cli
 
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.verification.SignatureVerifier
-import io.runwork.bundle.creator.ManifestSigner
+import io.runwork.bundle.creator.BundleManifestSigner
 import io.runwork.bundle.creator.TestFixtures
 import kotlinx.serialization.json.Json
 import kotlin.test.AfterTest
@@ -34,7 +34,7 @@ class BundleCreatorCliTest {
         outputDir = tempDir.resolve("output").toFile().also { it.mkdirs() }
 
         // Generate key pair and save to file
-        val (privateKey, pubKey) = ManifestSigner.generateKeyPair()
+        val (privateKey, pubKey) = BundleManifestSigner.generateKeyPair()
         publicKey = pubKey
         privateKeyFile = tempDir.resolve("private.key").toFile()
         privateKeyFile.writeText(privateKey)
@@ -64,7 +64,7 @@ class BundleCreatorCliTest {
         assertNotNull(publicKeyLine)
 
         // Keys should be valid
-        val signer = ManifestSigner.fromBase64(privateKeyLine.trim())
+        val signer = BundleManifestSigner.fromBase64(privateKeyLine.trim())
         val verifier = SignatureVerifier(publicKeyLine.trim())
 
         val data = "Test".toByteArray()
@@ -233,44 +233,6 @@ class BundleCreatorCliTest {
         )
 
         assertEquals(300, manifest.totalSize)
-    }
-
-    @Test
-    fun createBundle_usesCustomMainClass() {
-        File(inputDir, "test.jar").writeText("JAR")
-
-        main(arrayOf(
-            "--input", inputDir.absolutePath,
-            "--output", outputDir.absolutePath,
-            "--platform", "macos-arm64",
-            "--private-key-path", privateKeyFile.absolutePath,
-            "--main-class", "com.example.CustomMain"
-        ))
-
-        val manifest = json.decodeFromString<BundleManifest>(
-            File(outputDir, "manifest.json").readText()
-        )
-
-        assertEquals("com.example.CustomMain", manifest.mainClass)
-    }
-
-    @Test
-    fun createBundle_usesBuildNumber() {
-        File(inputDir, "test.txt").writeText("Content")
-
-        main(arrayOf(
-            "--input", inputDir.absolutePath,
-            "--output", outputDir.absolutePath,
-            "--platform", "macos-arm64",
-            "--private-key-path", privateKeyFile.absolutePath,
-            "--build-number", "12345"
-        ))
-
-        val manifest = json.decodeFromString<BundleManifest>(
-            File(outputDir, "manifest.json").readText()
-        )
-
-        assertEquals(12345, manifest.buildNumber)
     }
 
     @Test

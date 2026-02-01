@@ -10,7 +10,7 @@ import kotlin.time.Duration.Companion.hours
  * Can be constructed from [io.runwork.bundle.common.BundleLaunchConfig] when running
  * inside a bundle for self-updates.
  */
-data class UpdaterConfig(
+data class BundleUpdaterConfig(
     /** Absolute path to the application data directory containing bundle storage */
     val appDataDir: Path,
 

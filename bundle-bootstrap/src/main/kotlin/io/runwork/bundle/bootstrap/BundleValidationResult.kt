@@ -7,7 +7,7 @@ import java.nio.file.Path
 /**
  * Result of validating a bundle.
  */
-sealed class ValidationResult {
+sealed class BundleValidationResult {
     /**
      * Bundle is valid and ready to launch.
      *
@@ -17,15 +17,15 @@ sealed class ValidationResult {
     data class Valid(
         val manifest: BundleManifest,
         val versionPath: Path,
-    ) : ValidationResult()
+    ) : BundleValidationResult()
 
     /**
      * No bundle has been downloaded yet.
      *
      * The shell should use BundleUpdater.downloadLatest() to download the initial bundle,
-     * then call Bootstrap.validate() again.
+     * then call BundleBootstrap.validate() again.
      */
-    data object NoBundleExists : ValidationResult()
+    data object NoBundleExists : BundleValidationResult()
 
     /**
      * The bundle requires a newer shell version than what is currently running.
@@ -38,7 +38,7 @@ sealed class ValidationResult {
         val currentVersion: Int,
         val requiredVersion: Int,
         val updateUrl: String?,
-    ) : ValidationResult()
+    ) : BundleValidationResult()
 
     /**
      * Bundle validation failed.
@@ -49,7 +49,7 @@ sealed class ValidationResult {
     data class Failed(
         val reason: String,
         val failures: List<VerificationFailure> = listOf(),
-    ) : ValidationResult()
+    ) : BundleValidationResult()
 
     /**
      * A network error occurred during validation.
@@ -61,5 +61,5 @@ sealed class ValidationResult {
      */
     data class NetworkError(
         val message: String,
-    ) : ValidationResult()
+    ) : BundleValidationResult()
 }

@@ -15,7 +15,7 @@ import java.util.Base64
  *
  * Uses JDK's built-in Ed25519 support (available in JDK 15+).
  */
-class ManifestSigner(
+class BundleManifestSigner(
     private val privateKey: PrivateKey
 ) {
     companion object {
@@ -24,12 +24,12 @@ class ManifestSigner(
          *
          * @param privateKeyBase64 PKCS#8-encoded private key in Base64
          */
-        fun fromBase64(privateKeyBase64: String): ManifestSigner {
+        fun fromBase64(privateKeyBase64: String): BundleManifestSigner {
             val keyBytes = Base64.getDecoder().decode(privateKeyBase64)
             val keySpec = PKCS8EncodedKeySpec(keyBytes)
             val keyFactory = KeyFactory.getInstance("Ed25519")
             val privateKey = keyFactory.generatePrivate(keySpec)
-            return ManifestSigner(privateKey)
+            return BundleManifestSigner(privateKey)
         }
 
         /**

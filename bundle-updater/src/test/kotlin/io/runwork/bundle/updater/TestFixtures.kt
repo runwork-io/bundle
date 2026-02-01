@@ -77,7 +77,7 @@ object TestFixtures {
      */
     fun createSignedManifest(
         files: List<BundleFile>,
-        signer: TestManifestSigner,
+        signer: TestBundleManifestSigner,
         buildNumber: Long = 1,
         platform: String = "macos-arm64",
         mainClass: String = "io.runwork.TestMain",
@@ -89,16 +89,25 @@ object TestFixtures {
     }
 
     /**
+     * Result of generating a test key pair.
+     */
+    data class TestKeyPair(
+        val signer: TestBundleManifestSigner,
+        val verifier: io.runwork.bundle.common.verification.SignatureVerifier,
+        val publicKeyBase64: String,
+    )
+
+    /**
      * Generate a test key pair for signing/verification.
      */
-    fun generateTestKeyPair(): Pair<TestManifestSigner, io.runwork.bundle.common.verification.SignatureVerifier> {
+    fun generateTestKeyPair(): TestKeyPair {
         val keyPairGenerator = KeyPairGenerator.getInstance("Ed25519")
         val keyPair = keyPairGenerator.generateKeyPair()
         val privateKeyBase64 = Base64.getEncoder().encodeToString(keyPair.private.encoded)
         val publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
-        val signer = TestManifestSigner.fromBase64(privateKeyBase64)
+        val signer = TestBundleManifestSigner.fromBase64(privateKeyBase64)
         val verifier = io.runwork.bundle.common.verification.SignatureVerifier(publicKeyBase64)
-        return Pair(signer, verifier)
+        return TestKeyPair(signer, verifier, publicKeyBase64)
     }
 
     /**
@@ -223,17 +232,18 @@ object TestFixtures {
 /**
  * Simple manifest signer for tests.
  */
-class TestManifestSigner private constructor(
+class TestBundleManifestSigner private constructor(
     private val privateKeyBytes: ByteArray
 ) {
     companion object {
-        fun fromBase64(privateKeyBase64: String): TestManifestSigner {
+        fun fromBase64(privateKeyBase64: String): TestBundleManifestSigner {
             val privateKeyBytes = Base64.getDecoder().decode(privateKeyBase64)
-            return TestManifestSigner(privateKeyBytes)
+            return TestBundleManifestSigner(privateKeyBytes)
         }
     }
 
-    private val json = Json { prettyPrint = true }
+    // Must match SignatureVerifier's serialization format (no prettyPrint)
+    private val json = Json
 
     fun sign(data: ByteArray): String {
         val keyFactory = KeyFactory.getInstance("Ed25519")

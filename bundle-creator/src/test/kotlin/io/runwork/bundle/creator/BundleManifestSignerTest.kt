@@ -9,11 +9,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-class ManifestSignerTest {
+class BundleManifestSignerTest {
 
     @Test
     fun generateKeyPair_producesValidKeys() {
-        val (privateKey, publicKey) = ManifestSigner.generateKeyPair()
+        val (privateKey, publicKey) = BundleManifestSigner.generateKeyPair()
 
         // Both keys should be non-empty Base64 strings
         assertTrue(privateKey.isNotEmpty())
@@ -24,7 +24,7 @@ class ManifestSignerTest {
         java.util.Base64.getDecoder().decode(publicKey)
 
         // Keys should work for signing and verification
-        val signer = ManifestSigner.fromBase64(privateKey)
+        val signer = BundleManifestSigner.fromBase64(privateKey)
         val verifier = SignatureVerifier(publicKey)
 
         val data = "Test data".toByteArray()
@@ -35,8 +35,8 @@ class ManifestSignerTest {
 
     @Test
     fun generateKeyPair_producesUniqueKeys() {
-        val (privateKey1, publicKey1) = ManifestSigner.generateKeyPair()
-        val (privateKey2, publicKey2) = ManifestSigner.generateKeyPair()
+        val (privateKey1, publicKey1) = BundleManifestSigner.generateKeyPair()
+        val (privateKey2, publicKey2) = BundleManifestSigner.generateKeyPair()
 
         // Different key pairs should have different keys
         assertNotEquals(privateKey1, privateKey2)
@@ -45,9 +45,9 @@ class ManifestSignerTest {
 
     @Test
     fun fromBase64_loadsValidKey() {
-        val (privateKey, publicKey) = ManifestSigner.generateKeyPair()
+        val (privateKey, publicKey) = BundleManifestSigner.generateKeyPair()
 
-        val signer = ManifestSigner.fromBase64(privateKey)
+        val signer = BundleManifestSigner.fromBase64(privateKey)
 
         // Should be able to sign data
         val signature = signer.sign("test".toByteArray())
@@ -63,7 +63,7 @@ class ManifestSignerTest {
         val invalidKey = "not-a-valid-base64-key!!!"
 
         assertFailsWith<IllegalArgumentException> {
-            ManifestSigner.fromBase64(invalidKey)
+            BundleManifestSigner.fromBase64(invalidKey)
         }
     }
 
@@ -73,7 +73,7 @@ class ManifestSignerTest {
         val wrongKey = java.util.Base64.getEncoder().encodeToString("wrong key data".toByteArray())
 
         assertFailsWith<Exception> {
-            ManifestSigner.fromBase64(wrongKey)
+            BundleManifestSigner.fromBase64(wrongKey)
         }
     }
 
