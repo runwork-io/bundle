@@ -18,7 +18,7 @@ object PlatformPaths {
      * - Linux: $XDG_DATA_HOME/{appId} or ~/.local/share/{appId}
      */
     fun getDefaultAppDataDir(appId: String): Path {
-        return when (Os.current()) {
+        return when (Os.current) {
             Os.MACOS -> {
                 val home = System.getProperty("user.home")
                 Paths.get(home, "Library", "Application Support", appId)
@@ -40,5 +40,5 @@ object PlatformPaths {
     /**
      * Get the current platform.
      */
-    fun getPlatform(): Platform = Platform.current()
+    fun getPlatform(): Platform = Platform.current
 }

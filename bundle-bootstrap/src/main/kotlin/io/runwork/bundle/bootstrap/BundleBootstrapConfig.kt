@@ -23,7 +23,7 @@ data class BundleBootstrapConfig(
     val shellVersion: Int,
 
     /** Platform (OS and architecture) */
-    val platform: Platform = Platform.current(),
+    val platform: Platform = Platform.current,
 
     /** Fully qualified main class name to invoke in the bundle */
     val mainClass: String = "io.runwork.app.Main",
@@ -48,7 +48,7 @@ data class BundleBootstrapConfig(
         baseUrl: String,
         publicKey: String,
         shellVersion: Int,
-        platform: Platform = Platform.current(),
+        platform: Platform = Platform.current,
         mainClass: String = "io.runwork.app.Main",
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),

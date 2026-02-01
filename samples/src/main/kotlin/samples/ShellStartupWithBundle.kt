@@ -4,6 +4,7 @@ import io.runwork.bundle.bootstrap.BundleBootstrap
 import io.runwork.bundle.bootstrap.BundleBootstrapConfig
 import io.runwork.bundle.bootstrap.BundleBootstrapProgress
 import io.runwork.bundle.bootstrap.BundleValidationResult
+import io.runwork.bundle.common.Platform
 import java.nio.file.Path
 
 /**
@@ -19,7 +20,7 @@ suspend fun shellStartupWithBundle() {
         appDataDir = appDataDir,
         baseUrl = "https://updates.myapp.com",
         publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
-        platform = detectPlatform(),
+        platform = Platform.current,
         shellVersion = 1,
     )
 

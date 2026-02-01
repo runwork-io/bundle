@@ -29,7 +29,7 @@ Architecture.X86_64  // Intel/AMD 64-bit
 
 // Combine them or use auto-detection
 val platform = Platform(Os.MACOS, Architecture.ARM64)
-val currentPlatform = Platform.current()  // Detects from system properties
+val currentPlatform = Platform.current  // Detects from system properties
 
 // Convert to/from string format (for manifests)
 val platformStr = platform.toString()          // "macos-arm64"

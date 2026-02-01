@@ -3,6 +3,7 @@ package samples
 import io.runwork.bundle.bootstrap.BundleBootstrap
 import io.runwork.bundle.bootstrap.BundleBootstrapConfig
 import io.runwork.bundle.bootstrap.BundleValidationResult
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdaterConfig
 import io.runwork.bundle.updater.result.DownloadResult
@@ -21,7 +22,7 @@ suspend fun shellFirstRun() {
         appDataDir = appDataDir,
         baseUrl = "https://updates.myapp.com",
         publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
-        platform = detectPlatform(), // e.g., "macos-arm64"
+        platform = Platform.current, // e.g., "macos-arm64"
         shellVersion = 1,
     )
 
