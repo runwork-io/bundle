@@ -167,7 +167,7 @@ class BundleBootstrap(
 
         // Collect all JARs
         val jarUrls = manifest.files
-            .filter { it.path.endsWith(".jar") }
+            .filter { it.path.endsWith(".jar", ignoreCase = true) }
             .map { versionPath.resolve(it.path).toUri().toURL() }
             .toTypedArray()
 
