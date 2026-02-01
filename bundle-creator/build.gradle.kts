@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
-    application
     id("com.vanniktech.maven.publish")
 }
 
@@ -16,10 +15,6 @@ kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }
-}
-
-application {
-    mainClass.set("io.runwork.bundle.creator.cli.BundleCreatorCliKt")
 }
 
 dependencies {

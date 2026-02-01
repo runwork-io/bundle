@@ -22,7 +22,7 @@ All artifacts are published to Maven Central under the `io.runwork` group:
 | `bundle-common` | Shared data classes, verification, and CAS | Dependency of all other modules |
 | `bundle-bootstrap` | Validate and launch bundles | Shell application |
 | `bundle-updater` | Download bundles (initial + updates) | Shell application AND inside bundle |
-| `bundle-creator` | Create and sign bundles (library + CLI) | CI pipelines |
+| `bundle-creator` | Create and sign bundles (library) | CI pipelines |
 | `bundle-creator-gradle-task` | Gradle task for bundle creation | Gradle-based CI pipelines |
 
 ### Dependency Setup
@@ -176,22 +176,6 @@ tasks.register("generateBundleKeys") {
 | `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
 | `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable name containing private key |
 | `privateKeyFile` | `RegularFileProperty` | One required | - | File containing private key |
-
-### Creating Bundles with CLI
-
-For non-Gradle workflows, use the CLI tool:
-
-```bash
-# Generate key pair
-./gradlew :bundle-creator:run --args="--generate-keys"
-
-# Create a signed bundle
-./gradlew :bundle-creator:run --args="--input /path/to/app \
-    --output /path/to/bundle \
-    --platform macos-arm64 \
-    --main-class com.example.MainKt \
-    --private-key-env BUNDLE_PRIVATE_KEY"
-```
 
 ### Creating Bundles Programmatically
 

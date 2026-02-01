@@ -22,7 +22,7 @@ All artifacts are published to Maven Central under the `io.runwork` group:
 | `bundle-common` | Shared data classes, verification, and CAS | Dependency of all other modules |
 | `bundle-bootstrap` | Validate and launch bundles | Shell application |
 | `bundle-updater` | Download bundles (initial + updates) | Shell application AND inside bundle |
-| `bundle-creator` | Create and sign bundles (library + CLI) | CI pipelines |
+| `bundle-creator` | Create and sign bundles (library) | CI pipelines |
 | `bundle-creator-gradle-task` | Gradle task for bundle creation | Gradle-based CI pipelines |
 
 ## Module Architecture
@@ -75,8 +75,6 @@ The system is split into five modules with clear responsibilities:
 # Build the project
 ./gradlew build
 
-# Run the CLI (bundle creator)
-./gradlew :bundle-creator:run --args="create --help"
 ```
 
 ## Project Structure
@@ -118,13 +116,11 @@ bundle/
 │           ├── StorageManager.kt       # Version directory management
 │           └── CleanupManager.kt       # Old version & orphan CAS cleanup
 │
-├── bundle-creator/                     # CI tooling (library + CLI)
+├── bundle-creator/                     # CI tooling (library)
 │   └── src/main/kotlin/io/runwork/bundle/creator/
 │       ├── BundleManifestSigner.kt     # Ed25519 signing
 │       ├── BundlePackager.kt           # Creates bundle.zip
-│       ├── BundleManifestBuilder.kt    # Builds manifest from directory
-│       └── cli/
-│           └── BundleCreatorCli.kt     # CLI entry point
+│       └── BundleManifestBuilder.kt    # Builds manifest from directory
 │
 └── bundle-creator-gradle-task/          # Gradle integration
     └── src/main/kotlin/io/runwork/bundle/gradle/
