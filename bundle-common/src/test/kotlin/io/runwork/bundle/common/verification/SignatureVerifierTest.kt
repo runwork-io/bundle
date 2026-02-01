@@ -2,7 +2,6 @@ package io.runwork.bundle.common.verification
 
 import io.runwork.bundle.common.TestFixtures
 import io.runwork.bundle.common.manifest.BundleFile
-import io.runwork.bundle.common.manifest.FileType
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -82,7 +81,6 @@ class SignatureVerifierTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             )
         )
@@ -103,7 +101,6 @@ class SignatureVerifierTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             )
         ).copy(signature = "ed25519:not-valid-base64!!!")
@@ -123,7 +120,6 @@ class SignatureVerifierTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             )
         )
@@ -153,7 +149,6 @@ class SignatureVerifierTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             )
         )
@@ -183,7 +178,6 @@ class SignatureVerifierTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             ),
             buildNumber = 1

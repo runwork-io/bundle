@@ -36,7 +36,6 @@ suspend fun createBundle() {
             path = relativePath,
             hash = HashVerifier.computeHash(file.toPath()),
             size = file.length(),
-            type = builder.detectFileType(relativePath),
         )
     }
 

@@ -6,7 +6,6 @@ import io.runwork.bundle.bootstrap.BundleValidationResult
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.creator.BundlePackager
 import io.runwork.bundle.creator.BundleManifestBuilder
@@ -74,7 +73,7 @@ class IntegrationTest {
 
         // Create test files and signed manifest
         val jarContent = "test-jar-content".toByteArray()
-        val files = listOf(TestFixtures.createBundleFile("app.jar", jarContent, FileType.JAR))
+        val files = listOf(TestFixtures.createBundleFile("app.jar", jarContent))
         val manifest = TestFixtures.createSignedManifest(
             files = files,
             signer = keyPair.signer,
@@ -147,7 +146,7 @@ class IntegrationTest {
 
         // Create initial bundle (build 100)
         val initialContent = "v1-content".toByteArray()
-        val initialFiles = listOf(TestFixtures.createBundleFile("app.jar", initialContent, FileType.JAR))
+        val initialFiles = listOf(TestFixtures.createBundleFile("app.jar", initialContent))
         val initialManifest = TestFixtures.createSignedManifest(
             files = initialFiles,
             signer = keyPair.signer,
@@ -172,7 +171,7 @@ class IntegrationTest {
 
         // Create updated bundle (build 200)
         val updatedContent = "v2-content".toByteArray()
-        val updatedFiles = listOf(TestFixtures.createBundleFile("app.jar", updatedContent, FileType.JAR))
+        val updatedFiles = listOf(TestFixtures.createBundleFile("app.jar", updatedContent))
         val updatedManifest = TestFixtures.createSignedManifest(
             files = updatedFiles,
             signer = keyPair.signer,
@@ -258,15 +257,8 @@ class IntegrationTest {
                 path = path,
                 hash = TestFixtures.computeHash(file.toPath()),
                 size = file.length(),
-                type = builder.detectFileType(path),
             )
         }
-
-        // Verify file type detection
-        assertEquals(FileType.JAR, bundleFiles.find { it.path == "app.jar" }?.type)
-        assertEquals(FileType.JAR, bundleFiles.find { it.path == "lib/helper.jar" }?.type)
-        assertEquals(FileType.NATIVE, bundleFiles.find { it.path == "native/lib.dylib" }?.type)
-        assertEquals(FileType.RESOURCE, bundleFiles.find { it.path == "config.xml" }?.type)
 
         // Step 3: Package bundle
         val bundleHash = packager.packageBundle(inputDir.toFile(), outputDir.toFile(), bundleFiles)
@@ -310,7 +302,7 @@ class IntegrationTest {
 
         // Create a JAR file
         val jarContent = "test-jar-content".toByteArray()
-        val files = listOf(TestFixtures.createBundleFile("app.jar", jarContent, FileType.JAR))
+        val files = listOf(TestFixtures.createBundleFile("app.jar", jarContent))
         val manifest = TestFixtures.createSignedManifest(
             files = files,
             signer = keyPair.signer,
@@ -348,7 +340,7 @@ class IntegrationTest {
         val keyPair = TestFixtures.generateTestKeyPair()
 
         val originalContent = "original-content".toByteArray()
-        val files = listOf(TestFixtures.createBundleFile("app.jar", originalContent, FileType.JAR))
+        val files = listOf(TestFixtures.createBundleFile("app.jar", originalContent))
         val manifest = TestFixtures.createSignedManifest(
             files = files,
             signer = keyPair.signer,
@@ -385,7 +377,7 @@ class IntegrationTest {
         val keyPair = TestFixtures.generateTestKeyPair()
 
         val content = "content".toByteArray()
-        val files = listOf(TestFixtures.createBundleFile("app.jar", content, FileType.JAR))
+        val files = listOf(TestFixtures.createBundleFile("app.jar", content))
         val manifest = TestFixtures.createSignedManifest(
             files = files,
             signer = keyPair.signer,
@@ -481,8 +473,8 @@ class IntegrationTest {
         val existingContent = "A".repeat(100_000).toByteArray() // 100KB
         val newContent = "B".repeat(10_000).toByteArray() // 10KB
 
-        val existingFile = TestFixtures.createBundleFile("existing.jar", existingContent, FileType.JAR)
-        val newFile = TestFixtures.createBundleFile("new.jar", newContent, FileType.JAR)
+        val existingFile = TestFixtures.createBundleFile("existing.jar", existingContent)
+        val newFile = TestFixtures.createBundleFile("new.jar", newContent)
 
         val manifest = TestFixtures.createSignedManifest(
             files = listOf(existingFile, newFile),
@@ -551,7 +543,7 @@ class IntegrationTest {
 
         // Setup existing bundle at version 200
         val content = "v2-content".toByteArray()
-        val files = listOf(TestFixtures.createBundleFile("app.jar", content, FileType.JAR))
+        val files = listOf(TestFixtures.createBundleFile("app.jar", content))
         val currentManifest = TestFixtures.createSignedManifest(
             files = files,
             signer = keyPair.signer,

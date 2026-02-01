@@ -1,7 +1,6 @@
 package io.runwork.bundle.updater.download
 
 import io.runwork.bundle.common.manifest.BundleFile
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.updater.TestFixtures
 import io.runwork.bundle.updater.result.DownloadException
 import io.runwork.bundle.updater.result.DownloadResult
@@ -57,7 +56,6 @@ class DownloadManagerTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             ),
             buildNumber = 42,
@@ -141,7 +139,6 @@ class DownloadManagerTest {
                     path = "file.txt",
                     hash = hash,
                     size = content.length.toLong(),
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42
@@ -179,7 +176,6 @@ class DownloadManagerTest {
                 path = "existing$i.txt",
                 hash = existingHash,
                 size = existingContent.length.toLong(), // 1MB each
-                type = FileType.RESOURCE
             )
         }
 
@@ -188,7 +184,6 @@ class DownloadManagerTest {
             path = "new.txt",
             hash = hash,
             size = content.length.toLong(), // 100KB
-            type = FileType.RESOURCE
         )
 
         val manifest = TestFixtures.createTestManifest(
@@ -228,7 +223,6 @@ class DownloadManagerTest {
                     path = "file.txt",
                     hash = hash,
                     size = content.length.toLong(),
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42
@@ -274,7 +268,6 @@ class DownloadManagerTest {
                 path = "existing$i.txt",
                 hash = existingHash,
                 size = existingContent.length.toLong(), // 1MB each
-                type = FileType.RESOURCE
             )
         }
 
@@ -282,7 +275,6 @@ class DownloadManagerTest {
             path = "file.txt",
             hash = wrongHash,
             size = content.length.toLong(), // 100KB
-            type = FileType.RESOURCE
         )
 
         val manifest = TestFixtures.createTestManifest(
@@ -313,7 +305,6 @@ class DownloadManagerTest {
                     path = "file$i.txt",
                     hash = if (i == 1) fileHash else "sha256:${i.toString().padStart(64, '0')}",
                     size = 1000,
-                    type = FileType.RESOURCE
                 )
             },
             buildNumber = 42
@@ -346,7 +337,6 @@ class DownloadManagerTest {
                     path = "file.txt",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42
@@ -382,7 +372,6 @@ class DownloadManagerTest {
                     path = "app.jar",
                     hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
                     size = 1000,
-                    type = FileType.JAR
                 )
             ),
             buildNumber = 42,
@@ -439,7 +428,6 @@ class DownloadManagerTest {
                 path = "existing$i.txt",
                 hash = existingHash,
                 size = existingContent.length.toLong(),
-                type = FileType.RESOURCE
             )
         }
 
@@ -447,7 +435,6 @@ class DownloadManagerTest {
             path = "new.txt",
             hash = hash,
             size = content.length.toLong(),
-            type = FileType.RESOURCE
         )
 
         val manifest = TestFixtures.createTestManifest(
@@ -495,13 +482,11 @@ class DownloadManagerTest {
                     path = "file1.txt",
                     hash = file1Hash,
                     size = file1Content.length.toLong(),
-                    type = FileType.RESOURCE
                 ),
                 BundleFile(
                     path = "file2.txt",
                     hash = file2Hash,
                     size = file2Content.length.toLong(),
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42
@@ -544,7 +529,6 @@ class DownloadManagerTest {
                     path = "file.txt",
                     hash = hash,
                     size = content.length.toLong(),
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42
@@ -579,7 +563,6 @@ class DownloadManagerTest {
                     path = "large.bin",
                     hash = hash,
                     size = largeContent.size.toLong(),
-                    type = FileType.RESOURCE
                 )
             ),
             buildNumber = 42

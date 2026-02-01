@@ -6,7 +6,6 @@ import io.runwork.bundle.bootstrap.loader.LoadedBundle
 import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
@@ -168,7 +167,7 @@ class BundleBootstrap(
 
         // Collect all JARs
         val jarUrls = manifest.files
-            .filter { it.type == FileType.JAR }
+            .filter { it.path.endsWith(".jar") }
             .map { versionPath.resolve(it.path).toUri().toURL() }
             .toTypedArray()
 

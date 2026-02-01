@@ -5,7 +5,6 @@ import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -50,7 +49,7 @@ class BootstrapTest {
     fun validate_returnsValidForCompleteBundle() = runTest {
         // Set up a valid bundle
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         setupBundle(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
@@ -75,7 +74,7 @@ class BootstrapTest {
     fun validate_returnsNoBundleExistsForMissingVersionDir() = runTest {
         // Manifest exists but version directory is missing
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         // Write manifest but don't create version directory
@@ -92,7 +91,7 @@ class BootstrapTest {
     fun validate_returnsFailedForBadSignature() = runTest {
         // Create manifest with invalid signature
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
 
         // Create manifest and tamper with signature
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
@@ -118,7 +117,7 @@ class BootstrapTest {
     fun validate_returnsFailedForPlatformMismatch() = runTest {
         // Create manifest for different platform
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
@@ -139,7 +138,7 @@ class BootstrapTest {
     fun validate_returnsShellUpdateRequiredForOldShell() = runTest {
         // Create manifest requiring newer shell
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
@@ -162,7 +161,7 @@ class BootstrapTest {
     fun validate_returnsFailedForMissingCasFile() = runTest {
         // Create manifest with file, but don't create the CAS file
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         // Setup manifest and version directory but no CAS file
@@ -186,7 +185,7 @@ class BootstrapTest {
     fun validate_returnsFailedForCorruptedCasFile() = runTest {
         // Create manifest with one hash, but write CAS file with different content
         val originalContent = "original content"
-        val bundleFile = createBundleFile("test.txt", originalContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", originalContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         // Setup manifest
@@ -215,7 +214,7 @@ class BootstrapTest {
     fun validate_repairsMissingVersionLink() = runTest {
         // Setup: CAS file exists, but version directory link is missing
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         // Write manifest
@@ -249,7 +248,7 @@ class BootstrapTest {
     fun validate_repairsBrokenVersionLink() = runTest {
         // Setup: CAS file exists, version file exists but is NOT linked to CAS (different content)
         val originalContent = "original content"
-        val bundleFile = createBundleFile("test.txt", originalContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", originalContent.toByteArray())
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
         // Write manifest
@@ -283,7 +282,7 @@ class BootstrapTest {
     fun launch_throwsForMissingMainClass() = runTest {
         // Create a valid manifest pointing to a non-existent main class
         val fileContent = "test content"
-        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
@@ -308,7 +307,7 @@ class BootstrapTest {
         // Create a JAR with a class that has non-static main method
         val jarPath = createJarWithNonStaticMain()
         val jarContent = Files.readAllBytes(jarPath)
-        val bundleFile = createBundleFile("app.jar", jarContent, FileType.JAR)
+        val bundleFile = createBundleFile("app.jar", jarContent)
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
@@ -383,14 +382,12 @@ class BootstrapTest {
     private fun createBundleFile(
         path: String,
         content: ByteArray,
-        type: FileType
     ): BundleFile {
         val hash = HashVerifier.computeHash(content)
         return BundleFile(
             path = path,
             hash = hash,
             size = content.size.toLong(),
-            type = type
         )
     }
 

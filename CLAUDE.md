@@ -74,8 +74,7 @@ bundle/
 │   └── src/main/kotlin/io/runwork/bundle/common/
 │       ├── manifest/
 │       │   ├── BundleManifest.kt       # Data model
-│       │   ├── BundleFile.kt           # File entry
-│       │   └── FileType.kt             # JAR, NATIVE, RESOURCE, EXECUTABLE
+│       │   └── BundleFile.kt           # File entry
 │       ├── verification/
 │       │   ├── SignatureVerifier.kt    # Ed25519 verify (NOT sign)
 │       │   └── HashVerifier.kt         # SHA-256 hashing
@@ -259,11 +258,6 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 - `okhttp3` - HTTP client (bundle-updater only)
 
 ## Common Tasks
-
-### Adding a New File Type
-1. Add to `FileType` enum in `bundle-common/manifest/FileType.kt`
-2. Update `BundleClassLoader` if special handling needed
-3. Update CLI if needed for bundle creation
 
 ### Modifying Download Strategy
 Look at `UpdateDecider.decide()` which calculates effective cost:

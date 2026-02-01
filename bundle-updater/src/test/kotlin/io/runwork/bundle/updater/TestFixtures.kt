@@ -2,7 +2,6 @@ package io.runwork.bundle.updater
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -116,14 +115,12 @@ object TestFixtures {
     fun createBundleFile(
         path: String,
         content: ByteArray,
-        type: FileType = FileType.RESOURCE
     ): BundleFile {
         val hash = computeHash(content)
         return BundleFile(
             path = path,
             hash = hash,
             size = content.size.toLong(),
-            type = type
         )
     }
 

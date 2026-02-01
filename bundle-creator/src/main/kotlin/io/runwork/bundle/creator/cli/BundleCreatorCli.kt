@@ -2,7 +2,6 @@ package io.runwork.bundle.creator.cli
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.storage.PlatformPaths
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.creator.BundleManifestSigner
@@ -266,7 +265,6 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
                     path = relativePath,
                     hash = hash,
                     size = file.length(),
-                    type = detectFileType(relativePath)
                 )
             )
         }
@@ -320,15 +318,6 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
                 relativePath to file
             }
             .toList()
-    }
-
-    private fun detectFileType(path: String): FileType {
-        return when {
-            path.endsWith(".jar") -> FileType.JAR
-            path.endsWith(".dylib") || path.endsWith(".so") || path.endsWith(".dll") -> FileType.NATIVE
-            path.contains("/bin/") || path.endsWith("/bun") || path == "bun" -> FileType.EXECUTABLE
-            else -> FileType.RESOURCE
-        }
     }
 
     private fun createBundleZip(output: File, files: List<Pair<String, File>>) {
