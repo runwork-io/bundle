@@ -45,7 +45,7 @@ object TestFixtures {
         platform: String = "macos-arm64",
         mainClass: String = "io.runwork.TestMain",
         minimumShellVersion: Int = 1,
-        rootAppUpdateUrl: String? = null,
+        shellUpdateUrl: String? = null,
     ): BundleManifest {
         return BundleManifest(
             schemaVersion = 1,
@@ -53,7 +53,7 @@ object TestFixtures {
             platform = platform,
             createdAt = "2025-01-01T00:00:00Z",
             minimumShellVersion = minimumShellVersion,
-            rootAppUpdateUrl = rootAppUpdateUrl,
+            shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
             totalSize = files.sumOf { it.size },

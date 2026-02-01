@@ -20,7 +20,7 @@ class BundleManifestBuilder {
      * @param mainClass Fully qualified main class name
      * @param minShellVersion Minimum shell version required
      * @param bundleHash SHA-256 hash of the bundle.zip file
-     * @param rootAppUpdateUrl Optional URL for shell updates
+     * @param shellUpdateUrl Optional URL for shell updates
      * @return Unsigned manifest (signature field is empty)
      */
     suspend fun build(
@@ -30,7 +30,7 @@ class BundleManifestBuilder {
         mainClass: String,
         minShellVersion: Int,
         bundleHash: String,
-        rootAppUpdateUrl: String? = null,
+        shellUpdateUrl: String? = null,
     ): BundleManifest {
         val files = collectFiles(inputDir)
         val bundleFiles = files.map { (relativePath, file) ->
@@ -47,7 +47,7 @@ class BundleManifestBuilder {
             platform = platform,
             createdAt = Instant.now().toString(),
             minimumShellVersion = minShellVersion,
-            rootAppUpdateUrl = rootAppUpdateUrl,
+            shellUpdateUrl = shellUpdateUrl,
             files = bundleFiles,
             mainClass = mainClass,
             totalSize = bundleFiles.sumOf { it.size },

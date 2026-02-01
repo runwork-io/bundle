@@ -82,7 +82,7 @@ private fun printUsage() {
             --build-number <num>    Optional build number (defaults to current timestamp)
             --main-class <class>    Main class name (defaults to io.runwork.desktop.MainKt)
             --min-shell-version <ver> Minimum shell version required (defaults to 1)
-            --root-app-update-url <url> URL where users can download shell updates (optional)
+            --shell-update-url <url> URL where users can download shell updates (optional)
 
           Generate keys:
             --generate-keys         Generate a new Ed25519 key pair and print to stdout
@@ -104,7 +104,7 @@ private sealed class CliConfig {
         val buildNumber: Long?,
         val mainClass: String,
         val minShellVersion: Int,
-        val rootAppUpdateUrl: String?,
+        val shellUpdateUrl: String?,
     ) : CliConfig()
 }
 
@@ -121,7 +121,7 @@ private fun parseArgs(args: Array<String>): CliConfig {
     var buildNumber: Long? = null
     var mainClass = "io.runwork.desktop.MainKt"
     var minShellVersion = 1
-    var rootAppUpdateUrl: String? = null
+    var shellUpdateUrl: String? = null
 
     var i = 0
     while (i < args.size) {
@@ -160,8 +160,8 @@ private fun parseArgs(args: Array<String>): CliConfig {
                     ?: throw IllegalArgumentException("Invalid value for --min-shell-version")
             }
 
-            "--root-app-update-url" -> {
-                rootAppUpdateUrl = args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --root-app-update-url")
+            "--shell-update-url" -> {
+                shellUpdateUrl = args.getOrNull(++i) ?: throw IllegalArgumentException("Missing value for --shell-update-url")
             }
 
             else -> {
@@ -199,7 +199,7 @@ private fun parseArgs(args: Array<String>): CliConfig {
         buildNumber = buildNumber,
         mainClass = mainClass,
         minShellVersion = minShellVersion,
-        rootAppUpdateUrl = rootAppUpdateUrl,
+        shellUpdateUrl = shellUpdateUrl,
     )
 }
 
@@ -282,7 +282,7 @@ private class BundleCreator(private val config: CliConfig.CreateBundle) {
             platform = config.platform,
             createdAt = Instant.now().toString(),
             minimumShellVersion = config.minShellVersion,
-            rootAppUpdateUrl = config.rootAppUpdateUrl,
+            shellUpdateUrl = config.shellUpdateUrl,
             files = bundleFiles,
             mainClass = config.mainClass,
             totalSize = bundleFiles.sumOf { it.size },

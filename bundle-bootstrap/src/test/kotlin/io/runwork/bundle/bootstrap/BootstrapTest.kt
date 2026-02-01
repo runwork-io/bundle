@@ -143,7 +143,7 @@ class BootstrapTest {
             files = listOf(bundleFile),
             keyPair = keyPair,
             minimumShellVersion = 10,
-            rootAppUpdateUrl = "https://example.com/update"
+            shellUpdateUrl = "https://example.com/update"
         )
 
         setupBundle(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
@@ -398,7 +398,7 @@ class BootstrapTest {
         platform: String = "macos-arm64",
         mainClass: String = "io.runwork.TestMain",
         minimumShellVersion: Int = 1,
-        rootAppUpdateUrl: String? = null
+        shellUpdateUrl: String? = null
     ): BundleManifest {
         val unsigned = BundleManifest(
             schemaVersion = 1,
@@ -406,7 +406,7 @@ class BootstrapTest {
             platform = platform,
             createdAt = "2025-01-01T00:00:00Z",
             minimumShellVersion = minimumShellVersion,
-            rootAppUpdateUrl = rootAppUpdateUrl,
+            shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
             totalSize = files.sumOf { it.size },
