@@ -8,7 +8,6 @@ import io.runwork.bundle.download.DownloadResult
 import io.runwork.bundle.manifest.BundleManifest
 import io.runwork.bundle.storage.VerificationFailure
 import kotlin.test.assertIs
-import kotlin.test.assertEquals
 
 // ========== UpdateCheckResult Assertions ==========
 
@@ -28,40 +27,6 @@ fun UpdateCheckResult.assertUpdateAvailable(block: (UpdateInfo) -> Unit = {}) {
     block(this.info)
 }
 
-/**
- * Assert that a network error occurred.
- */
-fun UpdateCheckResult.assertNetworkError(block: (String) -> Unit = {}) {
-    assertIs<UpdateCheckResult.NetworkError>(this)
-    block(this.message)
-}
-
-/**
- * Assert that the manifest signature is invalid.
- */
-fun UpdateCheckResult.assertSignatureInvalid(block: (String) -> Unit = {}) {
-    assertIs<UpdateCheckResult.SignatureInvalid>(this)
-    block(this.message)
-}
-
-/**
- * Assert that there is a platform mismatch.
- */
-fun UpdateCheckResult.assertPlatformMismatch(
-    expected: String? = null,
-    actual: String? = null,
-    block: (UpdateCheckResult.PlatformMismatch) -> Unit = {}
-) {
-    assertIs<UpdateCheckResult.PlatformMismatch>(this)
-    if (expected != null) {
-        assertEquals(expected, this.expected, "Expected platform mismatch")
-    }
-    if (actual != null) {
-        assertEquals(actual, this.actual, "Actual platform mismatch")
-    }
-    block(this)
-}
-
 // ========== DownloadResult Assertions ==========
 
 /**
@@ -78,13 +43,6 @@ fun DownloadResult.assertSuccess(block: (Long) -> Unit = {}) {
 fun DownloadResult.assertFailure(block: (String) -> Unit = {}) {
     assertIs<DownloadResult.Failure>(this)
     block(this.error)
-}
-
-/**
- * Assert that the download was cancelled.
- */
-fun DownloadResult.assertCancelled() {
-    assertIs<DownloadResult.Cancelled>(this)
 }
 
 // ========== BundleVerificationResult Assertions ==========
@@ -119,12 +77,4 @@ fun BundleVerificationResult.assertNoBundleInstalled() {
  */
 fun RepairResult.assertSuccess() {
     assertIs<RepairResult.Success>(this)
-}
-
-/**
- * Assert that the repair failed.
- */
-fun RepairResult.assertFailure(block: (String) -> Unit = {}) {
-    assertIs<RepairResult.Failure>(this)
-    block(this.error)
 }
