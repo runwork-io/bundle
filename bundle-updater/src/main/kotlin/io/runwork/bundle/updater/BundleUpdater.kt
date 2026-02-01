@@ -252,9 +252,9 @@ class BundleUpdater(
             }
 
             // Verify platform matches
-            if (manifest.platform != config.platform) {
+            if (manifest.platform != config.platform.toString()) {
                 return ManifestFetchResult.PlatformMismatch(
-                    expected = config.platform,
+                    expected = config.platform.toString(),
                     actual = manifest.platform
                 )
             }

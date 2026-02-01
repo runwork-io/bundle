@@ -1,6 +1,7 @@
 package samples
 
 import io.runwork.bundle.common.BundleLaunchConfig
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdateEvent
 import io.runwork.bundle.updater.BundleUpdaterConfig
@@ -40,8 +41,8 @@ suspend fun startUpdateChecker(launchConfig: BundleLaunchConfig) {
         appDataDir = Path.of(launchConfig.appDataDir),
         baseUrl = launchConfig.baseUrl,
         publicKey = launchConfig.publicKey,
-        platform = launchConfig.platform,
         currentBuildNumber = launchConfig.currentBuildNumber,
+        platform = Platform.fromString(launchConfig.platform),
         checkInterval = 6.hours, // Default: check every 6 hours
     )
 

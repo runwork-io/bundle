@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.FileType
@@ -358,8 +359,8 @@ class BundleUpdaterTest {
             appDataDir = appDataDir,
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = "macos-arm64",
-            currentBuildNumber = currentBuildNumber
+            currentBuildNumber = currentBuildNumber,
+            platform = Platform.fromString("macos-arm64")
         )
         return BundleUpdater(config)
     }

@@ -87,7 +87,7 @@ class BundleBootstrap(
         }
 
         // Check platform
-        if (manifest.platform != config.platform) {
+        if (manifest.platform != config.platform.toString()) {
             return BundleValidationResult.Failed(
                 "Platform mismatch: manifest is for ${manifest.platform}, but running on ${config.platform}"
             )
@@ -224,7 +224,7 @@ class BundleBootstrap(
             appDataDir = config.appDataDir.toAbsolutePath().toString(),
             baseUrl = config.baseUrl,
             publicKey = config.publicKey,
-            platform = config.platform,
+            platform = config.platform.toString(),
             shellVersion = config.shellVersion,
             currentBuildNumber = manifest.buildNumber,
         )

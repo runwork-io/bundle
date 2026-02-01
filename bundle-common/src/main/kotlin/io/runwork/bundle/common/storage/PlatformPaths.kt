@@ -1,5 +1,7 @@
 package io.runwork.bundle.common.storage
 
+import io.runwork.bundle.common.Os
+import io.runwork.bundle.common.Platform
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -16,19 +18,17 @@ object PlatformPaths {
      * - Linux: $XDG_DATA_HOME/{appId} or ~/.local/share/{appId}
      */
     fun getDefaultAppDataDir(appId: String): Path {
-        val osName = System.getProperty("os.name").lowercase()
-
-        return when {
-            osName.contains("mac") || osName.contains("darwin") -> {
+        return when (Os.current()) {
+            Os.MACOS -> {
                 val home = System.getProperty("user.home")
                 Paths.get(home, "Library", "Application Support", appId)
             }
-            osName.contains("win") -> {
+            Os.WINDOWS -> {
                 val appData = System.getenv("APPDATA")
                     ?: Paths.get(System.getProperty("user.home"), "AppData", "Roaming").toString()
                 Paths.get(appData, appId)
             }
-            else -> {
+            Os.LINUX -> {
                 // Linux/Unix - follow XDG Base Directory Specification
                 val xdgData = System.getenv("XDG_DATA_HOME")
                     ?: Paths.get(System.getProperty("user.home"), ".local", "share").toString()
@@ -38,26 +38,7 @@ object PlatformPaths {
     }
 
     /**
-     * Get the platform identifier string.
-     *
-     * Returns one of: macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64
+     * Get the current platform.
      */
-    fun getPlatform(): String {
-        val osName = System.getProperty("os.name").lowercase()
-        val arch = System.getProperty("os.arch")
-
-        val os = when {
-            osName.contains("mac") || osName.contains("darwin") -> "macos"
-            osName.contains("win") -> "windows"
-            else -> "linux"
-        }
-
-        val archName = when {
-            arch == "aarch64" || arch == "arm64" -> "arm64"
-            arch.contains("64") || arch == "amd64" -> "x86_64"
-            else -> arch
-        }
-
-        return "$os-$archName"
-    }
+    fun getPlatform(): Platform = Platform.current()
 }
