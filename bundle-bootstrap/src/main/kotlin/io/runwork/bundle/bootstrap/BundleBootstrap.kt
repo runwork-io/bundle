@@ -4,6 +4,7 @@ import io.runwork.bundle.bootstrap.loader.BundleClassLoader
 import io.runwork.bundle.bootstrap.loader.BundleLoadException
 import io.runwork.bundle.bootstrap.loader.LoadedBundle
 import io.runwork.bundle.common.BundleLaunchConfig
+import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.common.storage.ContentAddressableStore
@@ -11,6 +12,11 @@ import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.common.verification.VerificationFailure
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -102,33 +108,31 @@ class BundleBootstrap(
             )
         }
 
-        // Check version directory exists and is complete
+        // Check version directory exists
+        // Note: If manifest.json exists and points to this version, the version is guaranteed
+        // to be complete (manifest.json is only saved after prepareVersion() succeeds)
         val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
-        val completeMarker = versionDir.resolve(".complete")
 
-        if (!withContext(Dispatchers.IO) { Files.exists(completeMarker) }) {
-            // Version directory incomplete or missing
-            // This could happen if download was interrupted
+        if (!withContext(Dispatchers.IO) { Files.exists(versionDir) }) {
+            // Version directory missing - this could happen if:
+            // - Download was interrupted before manifest.json was updated (shouldn't happen)
+            // - Files were manually deleted
             return BundleValidationResult.NoBundleExists
         }
 
-        // Verify all files concurrently
+        // Verify CAS files and repair version directory links (parallel with limit of 5)
         val totalFiles = manifest.files.size
         onProgress(BundleBootstrapProgress.VerifyingFiles(0, totalFiles))
 
-        val filesToVerify = manifest.files.map { file ->
-            versionDir.resolve(file.path) to file.hash
-        }
-
-        val results = HashVerifier.verifyFilesConcurrently(filesToVerify, parallelism = 5)
-
-        val failures = results.filterNot { it.success }.map { result ->
-            VerificationFailure(
-                path = versionDir.relativize(result.path).toString(),
-                expectedHash = result.expectedHash,
-                actualHash = result.actualHash,
-                reason = if (result.actualHash == null) "File missing" else "Hash mismatch"
-            )
+        val semaphore = Semaphore(5)
+        val failures = coroutineScope {
+            manifest.files.map { file ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        verifyFileAndLink(file, versionDir)
+                    }
+                }
+            }.awaitAll().filterNotNull()
         }
 
         onProgress(BundleBootstrapProgress.VerifyingFiles(totalFiles, totalFiles))
@@ -260,6 +264,88 @@ class BundleBootstrap(
             mainThread = mainThread,
             onExit = { callback -> exitCallbackHolder.callback = callback },
         )
+    }
+
+    /**
+     * Verify a single file's CAS entry and repair the version directory link if needed.
+     *
+     * @return VerificationFailure if verification failed, null if successful (including after repair)
+     */
+    private suspend fun verifyFileAndLink(
+        file: io.runwork.bundle.common.manifest.BundleFile,
+        versionDir: Path
+    ): VerificationFailure? {
+        val casFile = contentStore.getPath(file.hash)
+
+        // 1. Verify CAS file exists
+        if (casFile == null || !Files.exists(casFile)) {
+            return VerificationFailure(
+                path = file.path,
+                expectedHash = file.hash,
+                actualHash = null,
+                reason = "CAS file missing"
+            )
+        }
+
+        // 2. Verify CAS file hash
+        val actualHash = HashVerifier.computeHash(casFile)
+        if (actualHash != file.hash) {
+            return VerificationFailure(
+                path = file.path,
+                expectedHash = file.hash,
+                actualHash = actualHash,
+                reason = "CAS file corrupted"
+            )
+        }
+
+        // 3. Check/repair version directory link
+        val versionFile = versionDir.resolve(file.path)
+        val needsRepair = !Files.exists(versionFile) || !isSameFile(versionFile, casFile)
+
+        if (needsRepair) {
+            // Repair: create link using platform-appropriate method
+            try {
+                Files.createDirectories(versionFile.parent)
+                Files.deleteIfExists(versionFile)
+                createLink(versionFile, casFile)
+            } catch (e: Exception) {
+                return VerificationFailure(
+                    path = file.path,
+                    expectedHash = file.hash,
+                    actualHash = actualHash,
+                    reason = "Failed to create link: ${e.message}"
+                )
+            }
+        }
+
+        return null // Success
+    }
+
+    /**
+     * Create a link from dest to source using the appropriate method for the platform.
+     * - macOS/Linux: relative symlink (survives directory moves)
+     * - Windows: hard link (symlinks require elevated permissions)
+     */
+    private fun createLink(dest: Path, source: Path) {
+        when (Os.current) {
+            Os.WINDOWS -> Files.createLink(dest, source)
+            Os.MACOS, Os.LINUX -> {
+                val relativeSource = dest.parent.relativize(source)
+                Files.createSymbolicLink(dest, relativeSource)
+            }
+        }
+    }
+
+    /**
+     * Check if two paths refer to the same file.
+     * Uses Files.isSameFile which works correctly for both hard links and symlinks.
+     */
+    private fun isSameFile(a: Path, b: Path): Boolean {
+        return try {
+            Files.isSameFile(a, b)
+        } catch (e: Exception) {
+            false
+        }
     }
 }
 

@@ -3,8 +3,6 @@ package io.runwork.bundle.updater.storage
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.FileType
 import io.runwork.bundle.updater.TestFixtures
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -17,7 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicInteger
 
 class StorageManagerTest {
 
@@ -41,21 +38,10 @@ class StorageManagerTest {
     }
 
     @Test
-    fun hasVersion_returnsFalseWithoutCompleteMarker() = runTest {
-        // Create version directory but no .complete marker
+    fun hasVersion_returnsTrueWhenDirectoryExists() = runTest {
+        // Create version directory
         val versionDir = tempDir.resolve("versions/42")
         Files.createDirectories(versionDir)
-        TestFixtures.createTestFile(versionDir, "app.jar", "content")
-
-        assertFalse(storageManager.hasVersion(42))
-    }
-
-    @Test
-    fun hasVersion_returnsTrueWhenComplete() = runTest {
-        // Create version directory with .complete marker
-        val versionDir = tempDir.resolve("versions/42")
-        Files.createDirectories(versionDir)
-        Files.createFile(versionDir.resolve(".complete"))
 
         assertTrue(storageManager.hasVersion(42))
     }
@@ -90,7 +76,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_createsHardLinks() = runTest {
+    fun prepareVersion_createsLinks() = runTest {
         // Store a file in CAS first
         val content = "Test JAR content"
         val hash = TestFixtures.computeHash(content.toByteArray())
@@ -115,7 +101,6 @@ class StorageManagerTest {
         // Verify version directory exists with file
         val versionDir = storageManager.getVersionPath(42)
         assertTrue(Files.exists(versionDir.resolve("app.jar")))
-        assertTrue(Files.exists(versionDir.resolve(".complete")))
 
         // Verify content is correct
         assertEquals(content, Files.readString(versionDir.resolve("app.jar")))
@@ -147,7 +132,7 @@ class StorageManagerTest {
     }
 
     @Test
-    fun prepareVersion_createsCompleteMarker() = runTest {
+    fun prepareVersion_isIdempotent() = runTest {
         val content = "Content"
         val hash = TestFixtures.computeHash(content.toByteArray())
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
@@ -160,10 +145,12 @@ class StorageManagerTest {
             buildNumber = 42
         )
 
+        // Call prepareVersion twice - should not throw
+        storageManager.prepareVersion(manifest)
         storageManager.prepareVersion(manifest)
 
         val versionDir = storageManager.getVersionPath(42)
-        assertTrue(Files.exists(versionDir.resolve(".complete")))
+        assertTrue(Files.exists(versionDir.resolve("file.txt")))
     }
 
     @Test
@@ -186,56 +173,28 @@ class StorageManagerTest {
     }
 
     @Test
-    fun getCurrentVersion_returnsNullWhenNotSet() = runTest {
-        assertNull(storageManager.getCurrentVersion())
+    fun getCurrentBuildNumber_returnsNullWhenNoManifest() = runTest {
+        assertNull(storageManager.getCurrentBuildNumber())
     }
 
     @Test
-    fun setCurrentVersion_createsPointer() = runTest {
-        // Create a version first
-        Files.createDirectories(tempDir.resolve("versions/42"))
+    fun getCurrentBuildNumber_returnsBuildNumberFromManifest() = runTest {
+        val manifestJson = """{"schemaVersion":1,"buildNumber":42}"""
+        storageManager.saveManifest(manifestJson)
 
-        storageManager.setCurrentVersion(42)
-
-        assertEquals(42, storageManager.getCurrentVersion())
+        assertEquals(42, storageManager.getCurrentBuildNumber())
     }
 
     @Test
-    fun getCurrentVersion_readsFromPointer() = runTest {
-        Files.createDirectories(tempDir.resolve("versions/100"))
-        storageManager.setCurrentVersion(100)
-
-        val current = storageManager.getCurrentVersion()
-
-        assertEquals(100, current)
-    }
-
-    @Test
-    fun setCurrentVersion_updatesExistingPointer() = runTest {
-        Files.createDirectories(tempDir.resolve("versions/1"))
-        Files.createDirectories(tempDir.resolve("versions/2"))
-
-        storageManager.setCurrentVersion(1)
-        assertEquals(1, storageManager.getCurrentVersion())
-
-        storageManager.setCurrentVersion(2)
-        assertEquals(2, storageManager.getCurrentVersion())
-    }
-
-    @Test
-    fun listCompleteVersions_onlyReturnsCompleteVersions() = runTest {
-        // Create multiple versions, some complete, some not
+    fun listVersions_returnsAllVersions() = runTest {
         for (v in listOf(1L, 2L, 3L)) {
             val versionDir = tempDir.resolve("versions/$v")
             Files.createDirectories(versionDir)
-            if (v != 2L) { // Don't mark version 2 as complete
-                Files.createFile(versionDir.resolve(".complete"))
-            }
         }
 
-        val completeVersions = storageManager.listCompleteVersions()
+        val versions = storageManager.listVersions()
 
-        assertEquals(listOf(1L, 3L), completeVersions)
+        assertEquals(listOf(1L, 2L, 3L), versions)
     }
 
     @Test
@@ -244,7 +203,6 @@ class StorageManagerTest {
         val versionDir = tempDir.resolve("versions/42")
         Files.createDirectories(versionDir)
         Files.writeString(versionDir.resolve("file.txt"), "content")
-        Files.createFile(versionDir.resolve(".complete"))
 
         assertTrue(Files.exists(versionDir))
 
@@ -366,63 +324,4 @@ class StorageManagerTest {
         assertFalse(Files.exists(temp2))
     }
 
-    @Test
-    fun concurrentSetCurrentVersion_usesLockCorrectly() = runTest {
-        // Setup: Create two version directories
-        Files.createDirectories(tempDir.resolve("versions/1"))
-        Files.createDirectories(tempDir.resolve("versions/2"))
-
-        // Track execution order to verify mutex serialization
-        val executionOrder = AtomicInteger(0)
-        val operationSequence = mutableListOf<String>()
-
-        // Run two setCurrentVersion calls concurrently
-        val results = listOf(
-            async {
-                storageManager.withStorageLock {
-                    val startOrder = executionOrder.incrementAndGet()
-                    synchronized(operationSequence) {
-                        operationSequence.add("start1:$startOrder")
-                    }
-                    // Small delay to make interleaving more likely if mutex fails
-                    kotlinx.coroutines.delay(10)
-                    val endOrder = executionOrder.incrementAndGet()
-                    synchronized(operationSequence) {
-                        operationSequence.add("end1:$endOrder")
-                    }
-                    "op1"
-                }
-            },
-            async {
-                storageManager.withStorageLock {
-                    val startOrder = executionOrder.incrementAndGet()
-                    synchronized(operationSequence) {
-                        operationSequence.add("start2:$startOrder")
-                    }
-                    // Small delay
-                    kotlinx.coroutines.delay(10)
-                    val endOrder = executionOrder.incrementAndGet()
-                    synchronized(operationSequence) {
-                        operationSequence.add("end2:$endOrder")
-                    }
-                    "op2"
-                }
-            }
-        )
-
-        val completedOps = results.awaitAll()
-
-        // Both operations should complete
-        assertEquals(2, completedOps.size)
-
-        // Verify mutex serialization: operations shouldn't interleave
-        // Valid sequences: [start1, end1, start2, end2] or [start2, end2, start1, end1]
-        assertEquals(4, operationSequence.size)
-
-        // Parse the sequence to verify no interleaving
-        val sequence = operationSequence.map { it.split(":")[0] }
-        val isValid = (sequence == listOf("start1", "end1", "start2", "end2")) ||
-                      (sequence == listOf("start2", "end2", "start1", "end1"))
-        assertTrue(isValid, "Mutex should serialize operations. Actual sequence: $operationSequence")
-    }
 }

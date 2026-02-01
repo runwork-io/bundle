@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.storage
 
+import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
@@ -8,9 +9,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 
 /**
@@ -30,7 +34,6 @@ class StorageManager(
     val contentStore = ContentAddressableStore(bundleDir.resolve("cas"))
     private val versionsDir = bundleDir.resolve("versions")
     private val tempDir = bundleDir.resolve("temp")
-    private val currentPath = bundleDir.resolve("current")
     private val manifestPath = bundleDir.resolve("manifest.json")
 
     /** Mutex protecting all write operations to storage */
@@ -53,11 +56,15 @@ class StorageManager(
     }
 
     /**
-     * Check if a version is fully downloaded and prepared.
+     * Check if a version directory exists.
+     *
+     * Note: The presence of a version directory alone does not guarantee completeness.
+     * Completeness is guaranteed by the manifest.json pointing to this version -
+     * manifest.json is only saved after prepareVersion() completes successfully.
      */
     suspend fun hasVersion(buildNumber: Long): Boolean = withContext(Dispatchers.IO) {
         val versionDir = versionsDir.resolve(buildNumber.toString())
-        Files.exists(versionDir.resolve(".complete"))
+        Files.exists(versionDir)
     }
 
     /**
@@ -85,47 +92,28 @@ class StorageManager(
     }
 
     /**
-     * List all complete version build numbers (those with .complete marker).
-     */
-    suspend fun listCompleteVersions(): List<Long> = withContext(Dispatchers.IO) {
-        if (!Files.exists(versionsDir)) return@withContext listOf()
-
-        Files.list(versionsDir).use { stream ->
-            stream
-                .filter { Files.isDirectory(it) }
-                .filter { Files.exists(it.resolve(".complete")) }
-                .map { it.fileName.toString().toLongOrNull() }
-                .filter { it != null }
-                .map { it!! }
-                .sorted()
-                .toList()
-        }
-    }
-
-    /**
-     * Prepare a version directory by hard-linking files from CAS.
+     * Prepare a version directory by linking files from CAS.
      *
      * For each file in the manifest:
      * 1. Look up the file in CAS by hash
      * 2. Create parent directories in the version directory
-     * 3. Create a hard link from version/{path} to CAS/{hash}
-     * 4. Fall back to copy if hard link fails (e.g., cross-filesystem)
+     * 3. Create a link from version/{path} to CAS/{hash}
+     *    - On macOS/Linux: symlink (preferred as they don't modify the CAS file's inode)
+     *    - On Windows: hard link (symlinks require elevated permissions)
      *
-     * This operation is idempotent - if the version directory already exists with some files,
-     * those files are skipped, allowing recovery from partial failures.
+     * This operation is idempotent - if the version directory already exists with valid links,
+     * those files are skipped. Invalid or broken links are recreated.
+     *
+     * Completeness is guaranteed by the caller saving manifest.json after this method returns.
+     * If manifest.json exists and points to version N, that version is fully prepared.
      *
      * @param manifest The bundle manifest describing all files
-     * @throws IllegalStateException if a required file is missing from CAS
+     * @throws IllegalStateException if a required file is missing from CAS or linking fails
      */
     suspend fun prepareVersion(manifest: BundleManifest) {
         storageMutex.withLock {
             ensureDirectoriesExist()
             val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
-
-            // If already complete, skip
-            if (withContext(Dispatchers.IO) { Files.exists(versionDir.resolve(".complete")) }) {
-                return
-            }
 
             withContext(Dispatchers.IO) {
                 Files.createDirectories(versionDir)
@@ -137,90 +125,62 @@ class StorageManager(
 
                 val destPath = versionDir.resolve(file.path)
 
-                // Skip if file already exists (allows recovery from partial failures)
-                if (withContext(Dispatchers.IO) { Files.exists(destPath) }) continue
+                // Skip if file already exists AND is a valid link to the CAS file
+                val needsLink = withContext(Dispatchers.IO) {
+                    !Files.exists(destPath) || !isSameFile(destPath, sourcePath)
+                }
+                if (!needsLink) continue
 
                 withContext(Dispatchers.IO) {
                     Files.createDirectories(destPath.parent)
-
-                    try {
-                        // Try hard link first (most efficient, no data duplication)
-                        Files.createLink(destPath, sourcePath)
-                    } catch (e: Exception) {
-                        // Fall back to copy if hard link fails
-                        // This can happen on Windows in some cases, or cross-filesystem
-                        Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING)
-                    }
+                    Files.deleteIfExists(destPath)
+                    createLink(destPath, sourcePath)
                 }
-            }
-
-            // Mark as complete
-            withContext(Dispatchers.IO) {
-                Files.createFile(versionDir.resolve(".complete"))
             }
         }
     }
 
     /**
-     * Get the current active version build number.
-     *
-     * On Mac/Linux, this reads a symlink pointing to the version directory.
-     * On Windows, this reads a text file containing the version number.
-     *
-     * @return The current version build number, or null if none is set
+     * Check if two paths refer to the same file.
+     * Works correctly for both hard links and symlinks.
      */
-    suspend fun getCurrentVersion(): Long? = withContext(Dispatchers.IO) {
-        if (!Files.exists(currentPath)) return@withContext null
+    private fun isSameFile(a: Path, b: Path): Boolean {
+        return try {
+            Files.isSameFile(a, b)
+        } catch (e: Exception) {
+            false
+        }
+    }
 
-        try {
-            // Try to read as symlink
-            val target = Files.readSymbolicLink(currentPath)
-            target.fileName.toString().toLongOrNull()
-        } catch (e: java.nio.file.NotLinkException) {
-            // Not a symlink, try as regular file
-            try {
-                Files.readString(currentPath).trim().toLongOrNull()
-            } catch (e: Exception) {
-                null
+    /**
+     * Create a link from dest to source using the appropriate method for the platform.
+     * - macOS/Linux: relative symlink (survives directory moves)
+     * - Windows: hard link (symlinks require elevated permissions)
+     */
+    private fun createLink(dest: Path, source: Path) {
+        when (Os.current) {
+            Os.WINDOWS -> Files.createLink(dest, source)
+            Os.MACOS, Os.LINUX -> {
+                val relativeSource = dest.parent.relativize(source)
+                Files.createSymbolicLink(dest, relativeSource)
             }
+        }
+    }
+
+    /**
+     * Get the current build number from the saved manifest.
+     *
+     * @return The build number from manifest.json, or null if no manifest exists
+     */
+    suspend fun getCurrentBuildNumber(): Long? = withContext(Dispatchers.IO) {
+        val manifestJson = loadManifest() ?: return@withContext null
+        try {
+            Json.parseToJsonElement(manifestJson)
+                .jsonObject["buildNumber"]
+                ?.jsonPrimitive
+                ?.longOrNull
         } catch (e: Exception) {
             null
-        }
-    }
-
-    /**
-     * Set the current active version.
-     *
-     * On Mac/Linux, this creates a symlink to the version directory.
-     * On Windows, this writes a text file containing the version number.
-     *
-     * @param buildNumber The version to set as current
-     * @throws IllegalStateException if unable to set the current version
-     */
-    suspend fun setCurrentVersion(buildNumber: Long) {
-        storageMutex.withLock {
-            withContext(Dispatchers.IO) {
-                val versionDir = versionsDir.resolve(buildNumber.toString())
-
-                Files.deleteIfExists(currentPath)
-
-                try {
-                    // Try symlink first (Mac/Linux)
-                    Files.createSymbolicLink(currentPath, versionDir)
-                } catch (symlinkException: Exception) {
-                    // Windows fallback: write version to text file
-                    try {
-                        Files.writeString(currentPath, buildNumber.toString())
-                    } catch (writeException: Exception) {
-                        writeException.addSuppressed(symlinkException)
-                        throw IllegalStateException(
-                            "Failed to set current version to $buildNumber: " +
-                                "symlink failed and text file fallback also failed",
-                            writeException
-                        )
-                    }
-                }
-            }
         }
     }
 

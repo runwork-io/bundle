@@ -76,7 +76,7 @@ class BundleUpdater(
             }
 
             // Check for downgrade (buildNumber must be > current)
-            val currentBuild = storageManager.getCurrentVersion() ?: 0
+            val currentBuild = storageManager.getCurrentBuildNumber() ?: 0
             if (manifest.buildNumber <= currentBuild) {
                 return DownloadResult.AlreadyUpToDate
             }
@@ -211,7 +211,7 @@ class BundleUpdater(
                 is ManifestFetchResult.PlatformMismatch -> return null
             }
 
-            val currentBuild = storageManager.getCurrentVersion() ?: return null
+            val currentBuild = storageManager.getCurrentBuildNumber() ?: return null
 
             // If update available, DO NOT cleanup
             if (manifest.buildNumber > currentBuild) {
@@ -272,9 +272,6 @@ class BundleUpdater(
 
             // Save manifest
             storageManager.saveManifest(json.encodeToString(manifest))
-
-            // Update current pointer
-            storageManager.setCurrentVersion(manifest.buildNumber)
         }
     }
 
@@ -384,7 +381,7 @@ class BundleUpdater(
                 is ManifestFetchResult.SignatureFailure,
                 is ManifestFetchResult.PlatformMismatch -> return null
             }
-            val currentBuild = storageManager.getCurrentVersion() ?: return null
+            val currentBuild = storageManager.getCurrentBuildNumber() ?: return null
 
             // Only cleanup if up to date
             if (manifest.buildNumber <= currentBuild) {

@@ -112,15 +112,15 @@ suspend fun shellStartupWithBundle() {
  *
  * ~/.myapp/
  * └── bundle/                    # Configurable subdirectory (default: "bundle")
- *     ├── manifest.json          # Current manifest
- *     ├── current                # Symlink to active version (Unix)
+ *     ├── manifest.json          # Current manifest (single source of truth for version)
  *     ├── cas/
  *     │   └── sha256:abc123...   # Content-addressable store
  *     ├── versions/
  *     │   └── 12345/
- *     │       ├── .complete      # Version ready marker
- *     │       └── ...files...    # Hard-linked from CAS
+ *     │       └── ...files...    # Linked from CAS (symlinks on macOS/Linux, hard links on Windows)
  *     └── temp/                  # Download staging
  *
  * Note: Set bundleSubdirectory = "" to store files directly in ~/.myapp/ (legacy behavior)
+ * Note: Version completeness is guaranteed by manifest.json - it is only saved after
+ *       prepareVersion() completes successfully.
  */

@@ -122,7 +122,6 @@ class IntegrationTest {
 
         // Manually finalize: prepare version and save manifest
         storageManager.prepareVersion(manifest)
-        storageManager.setCurrentVersion(manifest.buildNumber)
         storageManager.saveManifest(json.encodeToString(manifest))
 
         // Step 3: Validate succeeds after download
@@ -132,7 +131,6 @@ class IntegrationTest {
 
         // Verify storage structure
         assertTrue(Files.exists(appDataDir.resolve("manifest.json")))
-        assertTrue(Files.exists(appDataDir.resolve("versions/100/.complete")))
         assertTrue(Files.exists(appDataDir.resolve("versions/100/app.jar")))
 
         downloadManager.close()
@@ -218,11 +216,9 @@ class IntegrationTest {
 
         // Step 3: Prepare new version
         storageManager.prepareVersion(fetchedManifest)
-        storageManager.setCurrentVersion(fetchedManifest.buildNumber)
         storageManager.saveManifest(json.encodeToString(fetchedManifest))
 
         // Verify new version is prepared
-        assertTrue(Files.exists(appDataDir.resolve("versions/200/.complete")))
         assertTrue(Files.exists(appDataDir.resolve("versions/200/app.jar")))
 
         // Verify new version validates
@@ -347,7 +343,7 @@ class IntegrationTest {
     }
 
     @Test
-    fun shellStartup_failsWithCorruptedFile() = runBlocking {
+    fun shellStartup_failsWithCorruptedCasFile() = runBlocking {
         val appDataDir = createTempDir("integration-startup-corrupt")
         val keyPair = TestFixtures.generateTestKeyPair()
 
@@ -359,9 +355,10 @@ class IntegrationTest {
             buildNumber = 42,
         )
 
-        // Setup bundle, then corrupt a file
+        // Setup bundle, then corrupt the CAS file (not version directory)
         setupExistingBundle(appDataDir, manifest, mapOf("app.jar" to originalContent))
-        Files.writeString(appDataDir.resolve("versions/42/app.jar"), "corrupted!")
+        val casFilePath = appDataDir.resolve("cas/${files[0].hash.removePrefix("sha256:")}")
+        Files.writeString(casFilePath, "corrupted!")
 
         val config = BundleBootstrapConfig(
             appDataDir = appDataDir,
@@ -379,6 +376,7 @@ class IntegrationTest {
         assertTrue(result.reason.contains("verification failed"))
         assertEquals(1, result.failures.size)
         assertEquals("app.jar", result.failures[0].path)
+        assertEquals("CAS file corrupted", result.failures[0].reason)
     }
 
     @Test
@@ -445,14 +443,8 @@ class IntegrationTest {
             Files.write(casPath, content)
         }
 
-        // Write .complete marker
-        Files.createFile(versionsDir.resolve(".complete"))
-
         // Write manifest.json
         Files.writeString(appDataDir.resolve("manifest.json"), json.encodeToString(manifest))
-
-        // Write current pointer
-        Files.writeString(appDataDir.resolve("current"), manifest.buildNumber.toString())
     }
 
     /**
