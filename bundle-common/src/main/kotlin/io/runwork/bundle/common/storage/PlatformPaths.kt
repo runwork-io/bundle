@@ -6,7 +6,7 @@ import java.nio.file.Paths
 /**
  * Platform-specific path resolution for bundle storage.
  */
-internal object PlatformPaths {
+object PlatformPaths {
 
     /**
      * Get the default application data directory for bundle storage.
