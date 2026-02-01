@@ -18,10 +18,11 @@ suspend fun shellStartupWithBundle() {
 
     val config = BundleBootstrapConfig(
         appDataDir = appDataDir,
+        bundleSubdirectory = "bundle", // Bundle files stored in ~/.myapp/bundle/
         baseUrl = "https://updates.myapp.com",
         publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
-        platform = Platform.current,
         shellVersion = 1,
+        platform = Platform.current,
     )
 
     val bootstrap = BundleBootstrap(config)
@@ -109,13 +110,16 @@ suspend fun shellStartupWithBundle() {
  * Storage layout after download:
  *
  * ~/.myapp/
- * ├── manifest.json          # Current manifest
- * ├── current                # Symlink to active version (Unix)
- * ├── cas/
- * │   └── sha256:abc123...   # Content-addressable store
- * ├── versions/
- * │   └── 12345/
- * │       ├── .complete      # Version ready marker
- * │       └── ...files...    # Hard-linked from CAS
- * └── temp/                  # Download staging
+ * └── bundle/                    # Configurable subdirectory (default: "bundle")
+ *     ├── manifest.json          # Current manifest
+ *     ├── current                # Symlink to active version (Unix)
+ *     ├── cas/
+ *     │   └── sha256:abc123...   # Content-addressable store
+ *     ├── versions/
+ *     │   └── 12345/
+ *     │       ├── .complete      # Version ready marker
+ *     │       └── ...files...    # Hard-linked from CAS
+ *     └── temp/                  # Download staging
+ *
+ * Note: Set bundleSubdirectory = "" to store files directly in ~/.myapp/ (legacy behavior)
  */

@@ -13,6 +13,9 @@ data class BundleBootstrapConfig(
     /** Absolute path to the application data directory containing bundle storage */
     val appDataDir: Path,
 
+    /** Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string means files are directly in appDataDir. */
+    val bundleSubdirectory: String = "bundle",
+
     /** Base URL for fetching manifests (used for signature verification context) */
     val baseUrl: String,
 
@@ -28,6 +31,9 @@ data class BundleBootstrapConfig(
     /** Fully qualified main class name to invoke in the bundle */
     val mainClass: String = "io.runwork.app.Main",
 ) {
+    /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
+    val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
+
     /**
      * Secondary constructor that uses an application ID to determine the default storage path.
      *
@@ -40,6 +46,7 @@ data class BundleBootstrapConfig(
      * @param baseUrl Base URL for fetching manifests
      * @param publicKey Ed25519 public key for manifest verification (base64 encoded)
      * @param shellVersion Version of the shell application
+     * @param bundleSubdirectory Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string stores files directly in appDataDir.
      * @param platform Platform (defaults to current platform)
      * @param mainClass Fully qualified main class name to invoke in the bundle
      */
@@ -48,10 +55,12 @@ data class BundleBootstrapConfig(
         baseUrl: String,
         publicKey: String,
         shellVersion: Int,
+        bundleSubdirectory: String = "bundle",
         platform: Platform = Platform.current,
         mainClass: String = "io.runwork.app.Main",
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
+        bundleSubdirectory = bundleSubdirectory,
         baseUrl = baseUrl,
         publicKey = publicKey,
         shellVersion = shellVersion,

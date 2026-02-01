@@ -25,13 +25,13 @@ import java.nio.file.attribute.BasicFileAttributes
  * All write operations are protected by a mutex to prevent concurrent modifications.
  */
 class StorageManager(
-    private val appDataDir: Path
+    private val bundleDir: Path
 ) {
-    val contentStore = ContentAddressableStore(appDataDir.resolve("cas"))
-    private val versionsDir = appDataDir.resolve("versions")
-    private val tempDir = appDataDir.resolve("temp")
-    private val currentPath = appDataDir.resolve("current")
-    private val manifestPath = appDataDir.resolve("manifest.json")
+    val contentStore = ContentAddressableStore(bundleDir.resolve("cas"))
+    private val versionsDir = bundleDir.resolve("versions")
+    private val tempDir = bundleDir.resolve("temp")
+    private val currentPath = bundleDir.resolve("current")
+    private val manifestPath = bundleDir.resolve("manifest.json")
 
     /** Mutex protecting all write operations to storage */
     private val storageMutex = Mutex()
@@ -230,7 +230,7 @@ class StorageManager(
     suspend fun saveManifest(manifestJson: String) {
         storageMutex.withLock {
             withContext(Dispatchers.IO) {
-                Files.createDirectories(appDataDir)
+                Files.createDirectories(bundleDir)
                 Files.writeString(manifestPath, manifestJson)
             }
         }

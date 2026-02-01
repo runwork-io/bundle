@@ -16,6 +16,9 @@ data class BundleUpdaterConfig(
     /** Absolute path to the application data directory containing bundle storage */
     val appDataDir: Path,
 
+    /** Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string means files are directly in appDataDir. */
+    val bundleSubdirectory: String = "bundle",
+
     /** Base URL for fetching manifests and bundle files */
     val baseUrl: String,
 
@@ -31,6 +34,9 @@ data class BundleUpdaterConfig(
     /** Interval between automatic update checks when running as a background service */
     val checkInterval: Duration = 6.hours,
 ) {
+    /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
+    val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
+
     /**
      * Secondary constructor that uses an application ID to determine the default storage path.
      *
@@ -43,6 +49,7 @@ data class BundleUpdaterConfig(
      * @param baseUrl Base URL for fetching manifests and bundle files
      * @param publicKey Ed25519 public key for manifest verification (base64 encoded)
      * @param currentBuildNumber Build number of the currently running bundle (0 if no bundle exists yet)
+     * @param bundleSubdirectory Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string stores files directly in appDataDir.
      * @param platform Platform (defaults to current platform)
      * @param checkInterval Interval between automatic update checks
      */
@@ -51,10 +58,12 @@ data class BundleUpdaterConfig(
         baseUrl: String,
         publicKey: String,
         currentBuildNumber: Long,
+        bundleSubdirectory: String = "bundle",
         platform: Platform = Platform.current,
         checkInterval: Duration = 6.hours,
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
+        bundleSubdirectory = bundleSubdirectory,
         baseUrl = baseUrl,
         publicKey = publicKey,
         currentBuildNumber = currentBuildNumber,

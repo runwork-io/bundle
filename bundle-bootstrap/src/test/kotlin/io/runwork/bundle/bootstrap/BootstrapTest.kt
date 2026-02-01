@@ -271,6 +271,7 @@ class BootstrapTest {
     ): BundleBootstrap {
         val config = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = "https://example.com",
             publicKey = keyPair.publicKeyBase64,
             shellVersion = shellVersion,

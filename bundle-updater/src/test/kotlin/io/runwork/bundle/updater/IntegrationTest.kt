@@ -90,10 +90,11 @@ class IntegrationTest {
 
         val bootstrapConfig = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
+            platform = Platform.fromString("macos-arm64"),
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
 
@@ -158,10 +159,11 @@ class IntegrationTest {
         // Verify initial bundle exists
         val bootstrapConfig = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
+            platform = Platform.fromString("macos-arm64"),
         )
         val bootstrap = BundleBootstrap(bootstrapConfig)
         val initialResult = bootstrap.validate()
@@ -323,10 +325,11 @@ class IntegrationTest {
 
         val config = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = "https://updates.example.com", // Not used for validation
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
+            platform = Platform.fromString("macos-arm64"),
         )
         val bootstrap = BundleBootstrap(config)
 
@@ -359,10 +362,11 @@ class IntegrationTest {
 
         val config = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = "https://updates.example.com",
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1,
+            platform = Platform.fromString("macos-arm64"),
         )
         val bootstrap = BundleBootstrap(config)
 
@@ -392,10 +396,11 @@ class IntegrationTest {
 
         val config = BundleBootstrapConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = "https://updates.example.com",
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             shellVersion = 1, // Running shell v1
+            platform = Platform.fromString("macos-arm64"),
         )
         val bootstrap = BundleBootstrap(config)
 
@@ -572,10 +577,11 @@ class IntegrationTest {
 
         val updaterConfig = BundleUpdaterConfig(
             appDataDir = appDataDir,
+            bundleSubdirectory = "",
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
-            platform = Platform.fromString("macos-arm64"),
             currentBuildNumber = 200, // Currently at version 200
+            platform = Platform.fromString("macos-arm64"),
         )
         val updater = BundleUpdater(updaterConfig)
 

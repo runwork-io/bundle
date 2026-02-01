@@ -39,8 +39,8 @@ import java.util.concurrent.atomic.AtomicReference
 class BundleUpdater(
     private val config: BundleUpdaterConfig
 ) : Closeable {
-    private val storageManager = StorageManager(config.appDataDir)
-    private val cleanupManager = CleanupManager(storageManager, config.appDataDir)
+    private val storageManager = StorageManager(config.bundleDir)
+    private val cleanupManager = CleanupManager(storageManager, config.bundleDir)
     private val downloadManager = DownloadManager(config.baseUrl, storageManager)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
     private val json = Json { ignoreUnknownKeys = true }

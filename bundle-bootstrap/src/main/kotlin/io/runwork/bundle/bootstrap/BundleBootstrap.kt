@@ -34,9 +34,9 @@ import kotlin.concurrent.thread
 class BundleBootstrap(
     private val config: BundleBootstrapConfig
 ) {
-    private val versionsDir = config.appDataDir.resolve("versions")
-    private val manifestPath = config.appDataDir.resolve("manifest.json")
-    private val casDir = config.appDataDir.resolve("cas")
+    private val versionsDir = config.bundleDir.resolve("versions")
+    private val manifestPath = config.bundleDir.resolve("manifest.json")
+    private val casDir = config.bundleDir.resolve("cas")
     private val contentStore = ContentAddressableStore(casDir)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
     private val json = Json { ignoreUnknownKeys = true }
@@ -222,6 +222,7 @@ class BundleBootstrap(
         // Build launch config to pass to bundle
         val launchConfig = BundleLaunchConfig(
             appDataDir = config.appDataDir.toAbsolutePath().toString(),
+            bundleSubdirectory = config.bundleSubdirectory,
             baseUrl = config.baseUrl,
             publicKey = config.publicKey,
             platform = config.platform.toString(),

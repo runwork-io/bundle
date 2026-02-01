@@ -39,6 +39,7 @@ fun main(args: Array<String>) {
 suspend fun startUpdateChecker(launchConfig: BundleLaunchConfig) {
     val config = BundleUpdaterConfig(
         appDataDir = Path.of(launchConfig.appDataDir),
+        bundleSubdirectory = launchConfig.bundleSubdirectory,
         baseUrl = launchConfig.baseUrl,
         publicKey = launchConfig.publicKey,
         currentBuildNumber = launchConfig.currentBuildNumber,
