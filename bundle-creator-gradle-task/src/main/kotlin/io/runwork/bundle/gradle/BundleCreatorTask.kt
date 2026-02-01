@@ -39,7 +39,15 @@ import java.util.zip.ZipOutputStream
  *     inputDirectory.set(layout.buildDirectory.dir("install/myapp"))
  *     outputDirectory.set(layout.buildDirectory.dir("bundle"))
  *     mainClass.set("com.myapp.MainKt")
- *     privateKeyEnvVar.set("BUNDLE_PRIVATE_KEY")
+ *
+ *     // Preferred: use Gradle's environment variable provider
+ *     privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
+ *
+ *     // Alternative: specify env var name (task reads it at execution time)
+ *     // privateKeyEnvVar.set("BUNDLE_PRIVATE_KEY")
+ *
+ *     // Alternative: read from file
+ *     // privateKeyFile.set(file("path/to/private.key"))
  *
  *     dependsOn("installDist")
  * }
@@ -97,8 +105,21 @@ abstract class BundleCreatorTask : DefaultTask() {
     abstract val shellUpdateUrl: Property<String>
 
     /**
+     * Base64-encoded private key value.
+     * This is the preferred option for CI/CD as it works well with Gradle providers:
+     * ```kotlin
+     * privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
+     * ```
+     * One of privateKey, privateKeyEnvVar, or privateKeyFile must be set.
+     */
+    @get:Input
+    @get:Optional
+    abstract val privateKey: Property<String>
+
+    /**
      * Environment variable name containing the Base64-encoded private key.
-     * Either privateKeyEnvVar or privateKeyFile must be set.
+     * The task will read from this environment variable at execution time.
+     * One of privateKey, privateKeyEnvVar, or privateKeyFile must be set.
      */
     @get:Input
     @get:Optional
@@ -106,7 +127,7 @@ abstract class BundleCreatorTask : DefaultTask() {
 
     /**
      * File containing the Base64-encoded private key.
-     * Either privateKeyEnvVar or privateKeyFile must be set.
+     * One of privateKey, privateKeyEnvVar, or privateKeyFile must be set.
      */
     @get:Optional
     @get:org.gradle.api.tasks.InputFile
@@ -243,6 +264,10 @@ abstract class BundleCreatorTask : DefaultTask() {
 
     private fun resolvePrivateKey(): String {
         return when {
+            privateKey.isPresent -> {
+                privateKey.get()
+            }
+
             privateKeyEnvVar.isPresent -> {
                 val envVar = privateKeyEnvVar.get()
                 System.getenv(envVar)
@@ -254,7 +279,7 @@ abstract class BundleCreatorTask : DefaultTask() {
             }
 
             else -> {
-                throw GradleException("Either privateKeyEnvVar or privateKeyFile must be set")
+                throw GradleException("One of privateKey, privateKeyEnvVar, or privateKeyFile must be set")
             }
         }
     }

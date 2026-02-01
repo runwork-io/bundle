@@ -146,7 +146,7 @@ tasks.register<BundleCreatorTask>("createBundle") {
     inputDirectory.set(layout.buildDirectory.dir("install/myapp"))
     outputDirectory.set(layout.buildDirectory.dir("bundle"))
     mainClass.set("com.myapp.MainKt")
-    privateKeyEnvVar.set("BUNDLE_PRIVATE_KEY")  // Or use privateKeyFile
+    privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
 
     dependsOn("installDist")
 }
@@ -172,7 +172,8 @@ tasks.register("generateBundleKeys") {
 | `buildNumber` | `Property<Long>` | No | `System.currentTimeMillis()` | Build number |
 | `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
 | `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
-| `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable containing private key |
+| `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
+| `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable name containing private key |
 | `privateKeyFile` | `RegularFileProperty` | One required | - | File containing private key |
 
 ### Creating Bundles with CLI

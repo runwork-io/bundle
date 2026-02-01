@@ -232,6 +232,46 @@ class BundleCreatorTaskTest {
     }
 
     @Test
+    fun taskUsesPrivateKeyDirectly() {
+        File(inputDir, "test.txt").writeText("Content")
+
+        // Generate a separate key pair for this test
+        val (directPrivateKey, directPublicKey) = BundleManifestSigner.generateKeyPair()
+
+        // Write the private key to a properties file to simulate providers.gradleProperty()
+        testProjectDir.resolve("gradle.properties").toFile().writeText(
+            "bundlePrivateKey=$directPrivateKey"
+        )
+
+        writeBuildFile(
+            """
+            tasks.register<BundleCreatorTask>("createBundle") {
+                inputDirectory.set(file("input"))
+                outputDirectory.set(layout.buildDirectory.dir("bundle"))
+                mainClass.set("com.test.MainKt")
+                platform.set("macos-arm64")
+                // Use the privateKey property directly with a provider
+                privateKey.set(providers.gradleProperty("bundlePrivateKey"))
+            }
+            """.trimIndent()
+        )
+
+        val result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments("createBundle", "--stacktrace")
+            .build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":createBundle")?.outcome)
+
+        val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
+        val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
+
+        // Verify signature with the direct key's public key
+        val verifier = SignatureVerifier(directPublicKey)
+        assertTrue(verifier.verifyManifest(manifest))
+    }
+
+    @Test
     fun taskSetsOptionalProperties() {
         File(inputDir, "test.txt").writeText("Content")
 
@@ -287,7 +327,7 @@ class BundleCreatorTaskTest {
             .withArguments("createBundle", "--stacktrace")
             .buildAndFail()
 
-        assertTrue(result.output.contains("privateKeyEnvVar or privateKeyFile"))
+        assertTrue(result.output.contains("privateKey, privateKeyEnvVar, or privateKeyFile"))
     }
 
     @Test
