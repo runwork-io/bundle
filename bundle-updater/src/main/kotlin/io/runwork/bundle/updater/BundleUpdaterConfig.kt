@@ -49,6 +49,7 @@ data class BundleUpdaterConfig(
      * @param baseUrl Base URL for fetching manifests and bundle files
      * @param publicKey Ed25519 public key for manifest verification (base64 encoded)
      * @param currentBuildNumber Build number of the currently running bundle (0 if no bundle exists yet)
+     * @param bundleSubdirectory Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string stores files directly in appDataDir.
      * @param platform Platform (defaults to current platform)
      * @param checkInterval Interval between automatic update checks
      */

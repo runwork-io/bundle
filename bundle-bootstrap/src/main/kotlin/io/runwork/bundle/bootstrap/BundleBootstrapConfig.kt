@@ -46,6 +46,7 @@ data class BundleBootstrapConfig(
      * @param baseUrl Base URL for fetching manifests
      * @param publicKey Ed25519 public key for manifest verification (base64 encoded)
      * @param shellVersion Version of the shell application
+     * @param bundleSubdirectory Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string stores files directly in appDataDir.
      * @param platform Platform (defaults to current platform)
      * @param mainClass Fully qualified main class name to invoke in the bundle
      */
