@@ -1,9 +1,41 @@
 package io.runwork.bundle.storage
 
+import java.nio.file.Path
+import java.nio.file.Paths
+
 /**
  * Platform-specific path resolution for bundle storage.
  */
-object PlatformPaths {
+internal object PlatformPaths {
+
+    /**
+     * Get the default application data directory for bundle storage.
+     *
+     * - macOS: ~/Library/Application Support/{appId}
+     * - Windows: %APPDATA%/{appId}
+     * - Linux: $XDG_DATA_HOME/{appId} or ~/.local/share/{appId}
+     */
+    fun getDefaultAppDataDir(appId: String): Path {
+        val osName = System.getProperty("os.name").lowercase()
+
+        return when {
+            osName.contains("mac") || osName.contains("darwin") -> {
+                val home = System.getProperty("user.home")
+                Paths.get(home, "Library", "Application Support", appId)
+            }
+            osName.contains("win") -> {
+                val appData = System.getenv("APPDATA")
+                    ?: Paths.get(System.getProperty("user.home"), "AppData", "Roaming").toString()
+                Paths.get(appData, appId)
+            }
+            else -> {
+                // Linux/Unix - follow XDG Base Directory Specification
+                val xdgData = System.getenv("XDG_DATA_HOME")
+                    ?: Paths.get(System.getProperty("user.home"), ".local", "share").toString()
+                Paths.get(xdgData, appId)
+            }
+        }
+    }
 
     /**
      * Get the platform identifier string.

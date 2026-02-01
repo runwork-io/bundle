@@ -61,8 +61,8 @@ class TestBundleServer private constructor(
      * Create a BundleConfig pointing to this server.
      *
      * @param publicKey Ed25519 public key for verification (base64 encoded)
-     * @param platform Platform identifier (defaults to "macos-arm64")
      * @param appDataDir Application data directory for bundle storage
+     * @param platform Platform identifier (defaults to "macos-arm64")
      */
     fun bundleConfig(
         publicKey: String,
@@ -72,8 +72,8 @@ class TestBundleServer private constructor(
         return BundleConfig(
             baseUrl = baseUrl,
             publicKey = publicKey,
-            platform = platform,
-            appDataDir = appDataDir
+            appDataDir = appDataDir,
+            platform = platform
         )
     }
 

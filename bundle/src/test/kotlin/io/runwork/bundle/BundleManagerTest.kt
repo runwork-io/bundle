@@ -47,8 +47,8 @@ class BundleManagerTest {
             BundleConfig(
                 baseUrl = mockServer.url("/").toString().trimEnd('/'),
                 publicKey = publicKey,
-                platform = "macos-arm64",
-                appDataDir = tempDir
+                appDataDir = tempDir,
+                platform = "macos-arm64"
             )
         )
     }

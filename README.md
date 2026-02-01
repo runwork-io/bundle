@@ -27,11 +27,18 @@ dependencies {
 ### Basic Bundle Management
 
 ```kotlin
+// Using appId for platform-specific default storage path
+val config = BundleConfig(
+    appId = "com.example.myapp",
+    baseUrl = "https://cdn.example.com/bundles",
+    publicKey = "your-ed25519-public-key"
+)
+
+// Or specify an explicit storage path
 val config = BundleConfig(
     baseUrl = "https://cdn.example.com/bundles",
     publicKey = "your-ed25519-public-key",
-    bundleDir = Path("/path/to/bundles"),
-    bundleName = "my-app"
+    appDataDir = Path("/custom/storage/path")
 )
 
 val manager = BundleManager(config)

@@ -1,5 +1,6 @@
 package io.runwork.bundle
 
+import io.runwork.bundle.storage.PlatformPaths
 import java.nio.file.Path
 
 /**
@@ -27,9 +28,34 @@ data class BundleConfig(
     /** Ed25519 public key for manifest verification (base64 encoded) */
     val publicKey: String,
 
-    /** Platform identifier: macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64 */
-    val platform: String,
-
     /** Application data directory for bundle storage */
     val appDataDir: Path,
-)
+
+    /** Platform identifier: macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64 */
+    val platform: String = PlatformPaths.getPlatform(),
+) {
+    /**
+     * Secondary constructor that uses an application ID to determine the default storage path.
+     *
+     * The [appId] is used to create the [appDataDir] in platform-specific locations:
+     * - macOS: ~/Library/Application Support/{appId}
+     * - Windows: %APPDATA%/{appId}
+     * - Linux: $XDG_DATA_HOME/{appId} or ~/.local/share/{appId}
+     *
+     * @param appId Unique application identifier for default storage path resolution
+     * @param baseUrl Base URL for manifest and bundle downloads
+     * @param publicKey Ed25519 public key for manifest verification (base64 encoded)
+     * @param platform Platform identifier (defaults to current platform)
+     */
+    constructor(
+        appId: String,
+        baseUrl: String,
+        publicKey: String,
+        platform: String = PlatformPaths.getPlatform(),
+    ) : this(
+        baseUrl = baseUrl,
+        publicKey = publicKey,
+        appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
+        platform = platform,
+    )
+}
