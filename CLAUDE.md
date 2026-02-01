@@ -13,14 +13,27 @@ Key capabilities:
 - Isolated classloaders for bundle execution
 - Cross-platform support (macOS, Linux, Windows)
 
+## Published Artifacts
+
+All artifacts are published to Maven Central under the `io.runwork` group:
+
+| Artifact | Description | Use Case |
+|----------|-------------|----------|
+| `bundle-common` | Shared data classes, verification, and CAS | Dependency of all other modules |
+| `bundle-bootstrap` | Validate and launch bundles | Shell application |
+| `bundle-updater` | Download bundles (initial + updates) | Shell application AND inside bundle |
+| `bundle-creator` | Create and sign bundles (library + CLI) | CI pipelines |
+| `bundle-creator-gradle-task` | Gradle task for bundle creation | Gradle-based CI pipelines |
+
 ## Module Architecture
 
-The system is split into four modules with clear responsibilities:
+The system is split into five modules with clear responsibilities:
 
 | Module | Purpose | Ships With |
 |--------|---------|------------|
 | **bundle-common** | Shared data classes, verification, CAS | All modules |
 | **bundle-creator** | Create and sign bundles | CI only |
+| **bundle-creator-gradle-task** | Gradle task wrapping bundle-creator | CI only (Gradle builds) |
 | **bundle-bootstrap** | Validate and launch bundles | Shell app |
 | **bundle-updater** | Download bundles (initial + updates) | Shell app AND inside bundle |
 
@@ -31,16 +44,16 @@ The system is split into four modules with clear responsibilities:
                       /      |      \
                      /       |       \
      bundle-creator    bundle-bootstrap    bundle-updater
-          (CI)              |                  |
-                            |                  |
-                            └──────┬───────────┘
-                                   |
-                              Shell app
-                           (bootstrap + updater)
+          |                  |                  |
+          |                  |                  |
+ bundle-creator-gradle-task   └──────┬───────────┘
+          (CI)                      |
+                               Shell app
+                            (bootstrap + updater)
 
-                            Also: bundle-updater
-                            ships inside bundle
-                            for self-updates
+                             Also: bundle-updater
+                             ships inside bundle
+                             for self-updates
 ```
 
 ## Build & Test Commands
@@ -54,6 +67,7 @@ The system is split into four modules with clear responsibilities:
 ./gradlew :bundle-bootstrap:test
 ./gradlew :bundle-updater:test
 ./gradlew :bundle-creator:test
+./gradlew :bundle-creator-gradle-task:test
 
 # Run a specific test class
 ./gradlew :bundle-updater:test --tests "io.runwork.bundle.updater.storage.StorageManagerTest"
@@ -104,13 +118,17 @@ bundle/
 │           ├── StorageManager.kt       # Version directory management
 │           └── CleanupManager.kt       # Old version & orphan CAS cleanup
 │
-└── bundle-creator/                     # CI tooling
-    └── src/main/kotlin/io/runwork/bundle/creator/
-        ├── BundleManifestSigner.kt     # Ed25519 signing
-        ├── BundlePackager.kt           # Creates bundle.zip
-        ├── BundleManifestBuilder.kt    # Builds manifest from directory
-        └── cli/
-            └── BundleCreatorCli.kt     # CLI entry point
+├── bundle-creator/                     # CI tooling (library + CLI)
+│   └── src/main/kotlin/io/runwork/bundle/creator/
+│       ├── BundleManifestSigner.kt     # Ed25519 signing
+│       ├── BundlePackager.kt           # Creates bundle.zip
+│       ├── BundleManifestBuilder.kt    # Builds manifest from directory
+│       └── cli/
+│           └── BundleCreatorCli.kt     # CLI entry point
+│
+└── bundle-creator-gradle-task/          # Gradle integration
+    └── src/main/kotlin/io/runwork/bundle/gradle/
+        └── BundleCreatorTask.kt        # Gradle task for bundle creation
 ```
 
 ## Key Classes by Module
@@ -146,6 +164,26 @@ bundle/
 | `BundleManifestSigner` | Ed25519 signing of manifests |
 | `BundleManifestBuilder` | Builds manifest from directory contents |
 | `BundlePackager` | Creates bundle.zip from directory |
+
+### bundle-creator-gradle-task
+| Class | Purpose |
+|-------|---------|
+| `BundleCreatorTask` | Gradle task that wraps bundle-creator for easy CI integration |
+
+#### BundleCreatorTask Properties
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `inputDirectory` | `DirectoryProperty` | Yes | - | Source files to bundle |
+| `outputDirectory` | `DirectoryProperty` | Yes | - | Output for manifest.json, bundle.zip, files/ |
+| `mainClass` | `Property<String>` | Yes | - | Fully qualified main class |
+| `platform` | `Property<String>` | No | Auto-detect | Platform ID (e.g., "macos-arm64") |
+| `buildNumber` | `Property<Long>` | Yes | - | Build number (set by CI) |
+| `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
+| `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
+| `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
+| `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable name containing private key |
+| `privateKeyFile` | `RegularFileProperty` | One required | - | File containing private key |
 
 ## Storage Layout
 
@@ -249,6 +287,7 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 - **JUnit is configured with a 20-second default timeout for all tests** (via `junit.jupiter.execution.timeout.default` in root `build.gradle.kts`)
 - **Never use `Thread.sleep()` or fixed `delay()` in tests** - tests should use proper synchronization primitives (e.g., `CompletableDeferred`, `Channel`, `Mutex`, `CountDownLatch`) or event-based approaches to avoid brittleness
 - CI runs on Ubuntu and Windows with JDK 17
+- `bundle-creator-gradle-task` uses Gradle TestKit for functional testing
 
 ## Dependencies
 
@@ -256,6 +295,8 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 - `kotlinx-serialization-json` - JSON serialization
 - `okio` - Efficient I/O and hashing
 - `okhttp3` - HTTP client (bundle-updater only)
+- `gradleApi()` - Gradle API (bundle-creator-gradle-task only, compileOnly)
+- `gradleTestKit()` - Gradle TestKit (bundle-creator-gradle-task tests only)
 
 ## Common Tasks
 
@@ -268,3 +309,34 @@ Look at `UpdateDecider.decide()` which calculates effective cost:
 1. Add verification logic to `StorageManager.verifyVersion()` or create new verifier
 2. Integrate into `BundleBootstrap.validate()`
 3. Add appropriate test coverage
+
+### Using BundleCreatorTask in Consumer Projects
+
+```kotlin
+// build.gradle.kts
+import io.runwork.bundle.gradle.BundleCreatorTask
+
+buildscript {
+    dependencies {
+        classpath("io.runwork:bundle-creator-gradle-task:<version>")
+    }
+}
+
+tasks.register<BundleCreatorTask>("createBundle") {
+    inputDirectory.set(layout.buildDirectory.dir("install/myapp"))
+    outputDirectory.set(layout.buildDirectory.dir("bundle"))
+    mainClass.set("com.myapp.MainKt")
+    buildNumber.set(System.currentTimeMillis())  // Or use CI build number
+    privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
+    dependsOn("installDist")
+}
+
+// Key generation helper
+tasks.register("generateBundleKeys") {
+    doLast {
+        val (privateKey, publicKey) = BundleCreatorTask.generateKeyPair()
+        println("Private key: $privateKey")
+        println("Public key: $publicKey")
+    }
+}
+```
