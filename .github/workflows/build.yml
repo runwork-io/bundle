@@ -6,6 +6,7 @@ on:
 
 jobs:
   test:
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -31,5 +32,5 @@ jobs:
         if: always()
         with:
           name: test-results-${{ matrix.os }}
-          path: build/reports/tests/
+          path: '**/build/reports/tests/'
           retention-days: 7
