@@ -25,6 +25,7 @@ suspend fun shellFirstRun() {
         publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
         shellVersion = 1,
         platform = Platform.current, // e.g., "macos-arm64"
+        mainClass = "com.myapp.Main", // Entry point for the bundle
     )
 
     val bootstrap = BundleBootstrap(bootstrapConfig)
