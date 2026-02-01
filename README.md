@@ -1,6 +1,6 @@
 # Bundle
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.runwork/bundle?color=blue)](https://central.sonatype.com/artifact/io.runwork/bundle)
+[![Maven Central](https://img.shields.io/maven-central/v/io.runwork/bundle-bootstrap?color=blue)](https://central.sonatype.com/artifact/io.runwork/bundle-bootstrap)
 
 A Kotlin library for managing versioned, signed software bundles with content-addressable storage.
 
