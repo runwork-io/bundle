@@ -1,6 +1,7 @@
 package io.runwork.bundle.bootstrap
 
 import io.runwork.bundle.bootstrap.loader.BundleLoadException
+import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
@@ -71,20 +72,15 @@ class BootstrapTest {
     }
 
     @Test
-    fun validate_returnsNoBundleExistsForIncompleteVersion() = runTest {
-        // Manifest exists but .complete marker is missing
+    fun validate_returnsNoBundleExistsForMissingVersionDir() = runTest {
+        // Manifest exists but version directory is missing
         val fileContent = "test content"
         val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
-        // Write manifest but don't create complete marker
+        // Write manifest but don't create version directory
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
-
-        // Create version dir with files but NO .complete marker
-        val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
-        Files.createDirectories(versionDir)
-        Files.write(versionDir.resolve("test.txt"), fileContent.toByteArray())
 
         val bootstrap = createBootstrap()
         val result = bootstrap.validate()
@@ -106,11 +102,10 @@ class BootstrapTest {
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(tamperedManifest))
 
-        // Create version directory with files and complete marker
+        // Create version directory with files
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
         Files.createDirectories(versionDir)
         Files.write(versionDir.resolve("test.txt"), fileContent.toByteArray())
-        Files.createFile(versionDir.resolve(".complete"))
 
         val bootstrap = createBootstrap()
         val result = bootstrap.validate()
@@ -164,20 +159,19 @@ class BootstrapTest {
     }
 
     @Test
-    fun validate_returnsFailedForMissingFiles() = runTest {
-        // Create manifest with file, but don't actually create the file
+    fun validate_returnsFailedForMissingCasFile() = runTest {
+        // Create manifest with file, but don't create the CAS file
         val fileContent = "test content"
         val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
-        // Setup bundle but without the actual file
+        // Setup manifest and version directory but no CAS file
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
 
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
         Files.createDirectories(versionDir)
-        // NOTE: Not writing test.txt, so file is missing
-        Files.createFile(versionDir.resolve(".complete"))
+        // NOTE: Not creating CAS file, so validation should fail
 
         val bootstrap = createBootstrap()
         val result = bootstrap.validate()
@@ -185,25 +179,28 @@ class BootstrapTest {
         assertIs<BundleValidationResult.Failed>(result)
         assertTrue(result.reason.contains("verification failed", ignoreCase = true))
         assertTrue(result.failures.isNotEmpty())
-        assertTrue(result.failures.any { it.reason == "File missing" })
+        assertTrue(result.failures.any { it.reason == "CAS file missing" })
     }
 
     @Test
-    fun validate_returnsFailedForHashMismatch() = runTest {
-        // Create manifest with one hash, but write file with different content
+    fun validate_returnsFailedForCorruptedCasFile() = runTest {
+        // Create manifest with one hash, but write CAS file with different content
         val originalContent = "original content"
         val bundleFile = createBundleFile("test.txt", originalContent.toByteArray(), FileType.RESOURCE)
         val manifest = createSignedManifest(listOf(bundleFile), keyPair)
 
-        // Setup bundle but with wrong file content
+        // Setup manifest
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
 
+        // Create CAS directory and write WRONG content to CAS file
+        val casDir = appDataDir.resolve("cas")
+        Files.createDirectories(casDir)
+        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        Files.write(casDir.resolve(hashFileName), "corrupted content".toByteArray())
+
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
         Files.createDirectories(versionDir)
-        // Write WRONG content
-        Files.write(versionDir.resolve("test.txt"), "corrupted content".toByteArray())
-        Files.createFile(versionDir.resolve(".complete"))
 
         val bootstrap = createBootstrap()
         val result = bootstrap.validate()
@@ -211,7 +208,75 @@ class BootstrapTest {
         assertIs<BundleValidationResult.Failed>(result)
         assertTrue(result.reason.contains("verification failed", ignoreCase = true))
         assertTrue(result.failures.isNotEmpty())
-        assertTrue(result.failures.any { it.reason == "Hash mismatch" })
+        assertTrue(result.failures.any { it.reason == "CAS file corrupted" })
+    }
+
+    @Test
+    fun validate_repairsMissingVersionLink() = runTest {
+        // Setup: CAS file exists, but version directory link is missing
+        val fileContent = "test content"
+        val bundleFile = createBundleFile("test.txt", fileContent.toByteArray(), FileType.RESOURCE)
+        val manifest = createSignedManifest(listOf(bundleFile), keyPair)
+
+        // Write manifest
+        val manifestPath = appDataDir.resolve("manifest.json")
+        Files.writeString(manifestPath, json.encodeToString(manifest))
+
+        // Create CAS file
+        val casDir = appDataDir.resolve("cas")
+        Files.createDirectories(casDir)
+        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        val casFile = casDir.resolve(hashFileName)
+        Files.write(casFile, fileContent.toByteArray())
+
+        // Create version directory but NO file link
+        val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
+        Files.createDirectories(versionDir)
+
+        // Validate should repair the missing link
+        val bootstrap = createBootstrap()
+        val result = bootstrap.validate()
+
+        assertIs<BundleValidationResult.Valid>(result)
+
+        // Verify the link was created
+        val versionFile = versionDir.resolve("test.txt")
+        assertTrue(Files.exists(versionFile))
+        assertEquals(fileContent, Files.readString(versionFile))
+    }
+
+    @Test
+    fun validate_repairsBrokenVersionLink() = runTest {
+        // Setup: CAS file exists, version file exists but is NOT linked to CAS (different content)
+        val originalContent = "original content"
+        val bundleFile = createBundleFile("test.txt", originalContent.toByteArray(), FileType.RESOURCE)
+        val manifest = createSignedManifest(listOf(bundleFile), keyPair)
+
+        // Write manifest
+        val manifestPath = appDataDir.resolve("manifest.json")
+        Files.writeString(manifestPath, json.encodeToString(manifest))
+
+        // Create CAS file with correct content
+        val casDir = appDataDir.resolve("cas")
+        Files.createDirectories(casDir)
+        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        val casFile = casDir.resolve(hashFileName)
+        Files.write(casFile, originalContent.toByteArray())
+
+        // Create version directory with WRONG content (not linked to CAS)
+        val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
+        Files.createDirectories(versionDir)
+        val versionFile = versionDir.resolve("test.txt")
+        Files.write(versionFile, "wrong content".toByteArray())
+
+        // Validate should repair the broken link
+        val bootstrap = createBootstrap()
+        val result = bootstrap.validate()
+
+        assertIs<BundleValidationResult.Valid>(result)
+
+        // Verify the link was repaired with correct content
+        assertEquals(originalContent, Files.readString(versionFile))
     }
 
     @Test
@@ -286,22 +351,33 @@ class BootstrapTest {
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
 
-        // Create version directory
+        // Create CAS directory and version directory
+        val casDir = appDataDir.resolve("cas")
+        Files.createDirectories(casDir)
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
         Files.createDirectories(versionDir)
 
-        // Write files to version directory
+        // Write files to CAS and link to version directory
         for (bundleFile in manifest.files) {
             val content = files[bundleFile.hash]
             if (content != null) {
-                val filePath = versionDir.resolve(bundleFile.path)
-                Files.createDirectories(filePath.parent)
-                Files.write(filePath, content)
+                // Write to CAS (filename is the hash without "sha256:" prefix)
+                val hashFileName = bundleFile.hash.removePrefix("sha256:")
+                val casFile = casDir.resolve(hashFileName)
+                Files.write(casFile, content)
+
+                // Create link in version directory (symlink on macOS/Linux, hard link on Windows)
+                val versionFile = versionDir.resolve(bundleFile.path)
+                Files.createDirectories(versionFile.parent)
+                when (Os.current) {
+                    Os.WINDOWS -> Files.createLink(versionFile, casFile)
+                    Os.MACOS, Os.LINUX -> {
+                        val relativeSource = versionFile.parent.relativize(casFile)
+                        Files.createSymbolicLink(versionFile, relativeSource)
+                    }
+                }
             }
         }
-
-        // Create .complete marker
-        Files.createFile(versionDir.resolve(".complete"))
     }
 
     private fun createBundleFile(

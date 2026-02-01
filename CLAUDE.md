@@ -136,7 +136,7 @@ bundle/
 | Class | Purpose |
 |-------|---------|
 | `BundleUpdater` | Main API - downloadLatest() for shell, start() for background updates |
-| `StorageManager` | Version lifecycle - prepareVersion(), setCurrentVersion() |
+| `StorageManager` | Version lifecycle - prepareVersion(), getCurrentBuildNumber() |
 | `DownloadManager` | HTTP downloads - downloadBundle(), fetchManifest() |
 | `UpdateDecider` | Strategy selection - FullBundle, Incremental, or NoDownloadNeeded |
 | `CleanupManager` | Removes old versions and orphaned CAS files |
@@ -152,16 +152,16 @@ bundle/
 
 ```
 appDataDir/
-├── manifest.json              # Current manifest (points to active version)
-├── current                    # Symlink (Unix) or text file (Windows) → version dir
+├── manifest.json              # Current manifest (single source of truth for version)
 ├── cas/                       # Content-addressable store
 │   └── {sha256-hash}          #   Files named by hash, immutable once written
 ├── versions/
 │   └── {buildNumber}/
-│       ├── .complete          # Marker file (version is fully prepared)
-│       └── {files...}         # Hard-linked from CAS
+│       └── {files...}         # Linked from CAS (symlinks on macOS/Linux, hard links on Windows)
 └── temp/                      # Download staging (incomplete downloads)
 ```
+
+Version completeness is guaranteed by `manifest.json`: it is only saved after `prepareVersion()` completes successfully within the same mutex-protected block. If `manifest.json` exists and points to version N, that version is fully prepared.
 
 ## Key Patterns & Conventions
 

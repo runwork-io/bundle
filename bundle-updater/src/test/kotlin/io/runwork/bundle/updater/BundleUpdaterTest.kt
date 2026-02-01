@@ -295,7 +295,6 @@ class BundleUpdaterTest {
         // Also create an old version directory to be cleaned up
         val oldVersionDir = appDataDir.resolve("versions/50")
         Files.createDirectories(oldVersionDir)
-        Files.createFile(oldVersionDir.resolve(".complete"))
         Files.writeString(oldVersionDir.resolve("old.txt"), "old content")
 
         // Server returns same version (up to date)
@@ -389,14 +388,8 @@ class BundleUpdaterTest {
             Files.write(casPath, content)
         }
 
-        // Write .complete marker
-        Files.createFile(versionsDir.resolve(".complete"))
-
         // Write manifest.json
         Files.writeString(appDataDir.resolve("manifest.json"), json.encodeToString(manifest))
-
-        // Write current pointer
-        Files.writeString(appDataDir.resolve("current"), manifest.buildNumber.toString())
     }
 
     private fun createBundleZip(files: List<BundleFile>, contents: Map<String, ByteArray>): Buffer {
