@@ -24,6 +24,7 @@ All artifacts are published to Maven Central under the `io.runwork` group:
 | `bundle-updater` | Download bundles (initial + updates) | Shell application AND inside bundle |
 | `bundle-creator` | Create and sign bundles (library) | CI pipelines |
 | `bundle-creator-gradle-task` | Gradle task for bundle creation | Gradle-based CI pipelines |
+| `bundle-resources` | Resource resolution with platform priority | Inside bundle (optional) |
 
 ## Module Architecture
 
@@ -32,6 +33,7 @@ The system is split into five modules with clear responsibilities:
 | Module | Purpose | Ships With |
 |--------|---------|------------|
 | **bundle-common** | Shared data classes, verification, CAS | All modules |
+| **bundle-resources** | Platform-aware resource resolution | Inside bundle (optional) |
 | **bundle-creator** | Create and sign bundles | CI only |
 | **bundle-creator-gradle-task** | Gradle task wrapping bundle-creator | CI only (Gradle builds) |
 | **bundle-bootstrap** | Validate and launch bundles | Shell app |
@@ -40,20 +42,20 @@ The system is split into five modules with clear responsibilities:
 ### Module Dependency Graph
 
 ```
-                       bundle-common
-                      /      |      \
-                     /       |       \
-     bundle-creator    bundle-bootstrap    bundle-updater
-          |                  |                  |
-          |                  |                  |
- bundle-creator-gradle-task   └──────┬───────────┘
-          (CI)                      |
-                               Shell app
-                            (bootstrap + updater)
+                          bundle-common
+                      /    /    |      \
+                     /    /     |       \
+     bundle-creator    /  bundle-bootstrap    bundle-updater
+          |           /         |                  |
+          |          /          |                  |
+ bundle-creator-  bundle-        └──────┬───────────┘
+ gradle-task      resources            |
+    (CI)          (in bundle)      Shell app
+                               (bootstrap + updater)
 
-                             Also: bundle-updater
-                             ships inside bundle
-                             for self-updates
+                             Also: bundle-updater &
+                             bundle-resources ship
+                             inside bundle
 ```
 
 ## Build & Test Commands
@@ -64,6 +66,7 @@ The system is split into five modules with clear responsibilities:
 
 # Run tests for a specific module
 ./gradlew :bundle-common:test
+./gradlew :bundle-resources:test
 ./gradlew :bundle-bootstrap:test
 ./gradlew :bundle-updater:test
 ./gradlew :bundle-creator:test
@@ -93,6 +96,11 @@ bundle/
 │       ├── storage/
 │       │   └── ContentAddressableStore.kt
 │       └── BundleLaunchConfig.kt       # Config passed to bundle main()
+│
+├── bundle-resources/                   # Resource resolution
+│   └── src/main/kotlin/io/runwork/bundle/resources/
+│       ├── BundleResources.kt          # Static singleton for resource resolution
+│       └── ResourceNotFoundException.kt # Exception for missing resources
 │
 ├── bundle-bootstrap/                   # Validation and launch
 │   └── src/main/kotlin/io/runwork/bundle/bootstrap/
@@ -137,6 +145,12 @@ bundle/
 | `HashVerifier` | SHA-256 computation using Okio |
 | `SignatureVerifier` | Ed25519 verification using JDK built-in |
 | `BundleLaunchConfig` | Config passed from shell to bundle's main() |
+
+### bundle-resources
+| Class | Purpose |
+|-------|---------|
+| `BundleResources` | Static singleton - init(), resolve(), resolveOrThrow(), loadNativeLibrary() |
+| `ResourceNotFoundException` | Exception with path and searchedLocations |
 
 ### bundle-bootstrap
 | Class | Purpose |
