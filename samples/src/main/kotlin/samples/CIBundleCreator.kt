@@ -37,12 +37,8 @@ suspend fun createBundle() {
     val builder = BundleManifestBuilder()
     val packager = BundlePackager()
 
-    // Step 1: Detect target platforms from the resources folder structure
-    // Or specify them explicitly: listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
-    val targetPlatforms = builder.detectPlatforms(inputDir).ifEmpty {
-        // Default platforms if none detected
-        listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
-    }
+    // Step 1: Specify target platforms explicitly
+    val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
     println("Target platforms: $targetPlatforms")
 
     // Step 2: Collect files with platform constraints and compute hashes

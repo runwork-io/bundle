@@ -219,7 +219,7 @@ Version completeness is guaranteed by `manifest.json`: it is only saved after `p
 - Signature failures are retried (could be CDN corruption)
 
 ### Platform Conventions
-- Platform IDs: `{os}-{arch}` format (e.g., `macos-arm64`, `windows-x86_64`, `linux-x86_64`)
+- Platform IDs: `{os}-{arch}` format (e.g., `macos-arm64`, `windows-x64`, `linux-x64`)
 - Paths in manifests use forward slashes (normalized on Windows)
 - Version numbers are `Long` values (monotonically increasing)
 

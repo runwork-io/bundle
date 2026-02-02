@@ -29,12 +29,12 @@ import java.util.zip.ZipOutputStream
  *
  * This task packages a directory into a signed bundle with:
  * - manifest.json: Signed manifest file with multi-platform support
- * - bundle-{platform}.zip: Per-platform bundle archives for initial downloads
+ * - bundle-{fingerprint}.zip: Per-platform bundle archives for initial downloads (deduplicated by content)
  * - files/: Individual files named by hash for incremental updates
  *
- * Platform-specific resources are detected from the resources/ folder structure:
- * - resources/common/ - Universal files
- * - resources/macos/ - macOS only
+ * Platform-specific resources should be organized in the resources/ folder structure:
+ * - resources/common/ - Universal files (included for all platforms)
+ * - resources/macos/ - macOS only (both arm64 and x64)
  * - resources/macos-arm64/ - macOS ARM64 only
  * - resources/windows-x64/ - Windows x64 only
  * - etc.
@@ -48,8 +48,6 @@ import java.util.zip.ZipOutputStream
  *     outputDirectory.set(layout.buildDirectory.dir("bundle"))
  *     mainClass.set("com.myapp.MainKt")
  *     buildNumber.set(System.currentTimeMillis())  // Or use CI build number
- *
- *     // Optional: specify target platforms (auto-detected from resources/ if not set)
  *     platforms.set(listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64"))
  *
  *     // Preferred: use Gradle's environment variable provider
@@ -77,10 +75,10 @@ abstract class BundleCreatorTask : DefaultTask() {
 
     /**
      * List of target platforms (e.g., ["macos-arm64", "macos-x64", "windows-x64"]).
-     * If not specified, platforms are auto-detected from resources/ subdirectories.
+     *
+     * Valid platform values are: macos-arm64, macos-x64, windows-arm64, windows-x64, linux-arm64, linux-x64
      */
     @get:Input
-    @get:Optional
     abstract val platforms: ListProperty<String>
 
     /**
@@ -167,18 +165,21 @@ abstract class BundleCreatorTask : DefaultTask() {
         // Get private key
         val privateKeyBase64 = resolvePrivateKey()
 
-        // Determine target platforms
-        val targetPlatforms = if (platforms.isPresent && platforms.get().isNotEmpty()) {
-            platforms.get()
-        } else {
-            manifestBuilder.detectPlatforms(inputDir).also {
-                if (it.isEmpty()) {
-                    throw GradleException(
-                        "No target platforms specified and none detected from resources/ folder. " +
-                            "Either set the 'platforms' property or create platform-specific resources directories " +
-                            "(e.g., resources/macos-arm64/, resources/windows-x64/)."
-                    )
-                }
+        // Get and validate target platforms
+        val targetPlatforms = platforms.get()
+        if (targetPlatforms.isEmpty()) {
+            throw GradleException("The 'platforms' property must not be empty")
+        }
+
+        // Validate each platform
+        for (platformId in targetPlatforms) {
+            try {
+                Platform.fromString(platformId)
+            } catch (e: IllegalArgumentException) {
+                throw GradleException(
+                    "Invalid platform '$platformId'. Valid platforms are: " +
+                        "macos-arm64, macos-x64, windows-arm64, windows-x64, linux-arm64, linux-x64"
+                )
             }
         }
 

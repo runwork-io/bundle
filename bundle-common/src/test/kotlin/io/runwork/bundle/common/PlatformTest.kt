@@ -26,14 +26,6 @@ class PlatformTest {
     }
 
     @Test
-    fun `Platform fromString accepts legacy x86_64 architecture`() {
-        // Should accept x86_64 and map it to X64
-        val macosX64 = Platform.fromString("macos-x86_64")
-        assertEquals(Os.MACOS, macosX64.os)
-        assertEquals(Arch.X64, macosX64.arch)
-    }
-
-    @Test
     fun `Platform toString produces correct format`() {
         assertEquals("macos-arm64", Platform(Os.MACOS, Arch.ARM64).toString())
         assertEquals("windows-x64", Platform(Os.WINDOWS, Arch.X64).toString())
@@ -78,8 +70,6 @@ class PlatformTest {
     fun `Arch fromId parses valid architecture identifiers`() {
         assertEquals(Arch.ARM64, Arch.fromId("arm64"))
         assertEquals(Arch.X64, Arch.fromId("x64"))
-        // Also accepts legacy x86_64
-        assertEquals(Arch.X64, Arch.fromId("x86_64"))
     }
 
     @Test

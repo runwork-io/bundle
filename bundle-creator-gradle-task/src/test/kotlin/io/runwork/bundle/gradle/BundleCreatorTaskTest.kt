@@ -302,6 +302,31 @@ class BundleCreatorTaskTest {
     }
 
     @Test
+    fun taskFailsWithInvalidPlatform() {
+        File(inputDir, "test.txt").writeText("Content")
+
+        writeBuildFile(
+            """
+            tasks.register<BundleCreatorTask>("createBundle") {
+                inputDirectory.set(file("input"))
+                outputDirectory.set(layout.buildDirectory.dir("bundle"))
+                mainClass.set("com.test.MainKt")
+                platforms.set(listOf("invalid-platform"))
+                buildNumber.set(1L)
+                privateKeyFile.set(file("private.key"))
+            }
+            """.trimIndent()
+        )
+
+        val result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments("createBundle", "--stacktrace")
+            .buildAndFail()
+
+        assertTrue(result.output.contains("Invalid platform 'invalid-platform'"))
+    }
+
+    @Test
     fun generateKeyPairReturnsValidKeys() {
         val (privateKey, publicKey) = BundleCreatorTask.generateKeyPair()
 

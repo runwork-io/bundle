@@ -22,7 +22,7 @@ data class BundleLaunchConfig(
     /** Base64-encoded Ed25519 public key for manifest signature verification */
     val publicKey: String,
 
-    /** Platform identifier (e.g., "macos-arm64", "windows-x86_64") */
+    /** Platform identifier (e.g., "macos-arm64", "windows-x64") */
     val platform: String,
 
     /** Version of the shell application that launched this bundle */

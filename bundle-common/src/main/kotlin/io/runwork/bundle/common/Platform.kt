@@ -1,5 +1,6 @@
 package io.runwork.bundle.common
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -7,8 +8,13 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class Os(val id: String) {
+    @SerialName("macos")
     MACOS("macos"),
+
+    @SerialName("windows")
     WINDOWS("windows"),
+
+    @SerialName("linux")
     LINUX("linux");
 
     companion object {
@@ -43,22 +49,21 @@ enum class Os(val id: String) {
  */
 @Serializable
 enum class Arch(val id: String) {
+    @SerialName("arm64")
     ARM64("arm64"),
+
+    @SerialName("x64")
     X64("x64");
 
     companion object {
         /**
          * Parse an architecture from its string identifier.
-         * Accepts both "x64" (preferred) and "x86_64" (legacy) for compatibility.
          *
          * @throws IllegalArgumentException if the architecture is not recognized
          */
         fun fromId(id: String): Arch {
-            return when (id) {
-                "x64", "x86_64" -> X64
-                "arm64" -> ARM64
-                else -> throw IllegalArgumentException("Unknown architecture: $id")
-            }
+            return entries.find { it.id == id }
+                ?: throw IllegalArgumentException("Unknown architecture: $id")
         }
 
         /**
@@ -93,7 +98,6 @@ data class Platform(
     companion object {
         /**
          * Parse a platform from its string identifier (e.g., "macos-arm64").
-         * Accepts both "x64" and "x86_64" for the architecture portion.
          *
          * @throws IllegalArgumentException if the platform string is malformed or uses unknown values
          */

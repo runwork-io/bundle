@@ -122,7 +122,7 @@ class BootstrapTest {
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
-            platform = "windows-x86_64" // Different from config platform
+            platform = "windows-x64" // Different from config platform
         )
 
         setupBundle(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
