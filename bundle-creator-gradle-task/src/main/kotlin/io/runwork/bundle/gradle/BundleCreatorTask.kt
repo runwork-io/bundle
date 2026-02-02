@@ -32,7 +32,9 @@ import java.util.zip.ZipOutputStream
  * - bundle-{fingerprint}.zip: Per-platform bundle archives for initial downloads (deduplicated by content)
  * - files/: Individual files named by hash for incremental updates
  *
- * Platform-specific resources should be organized in the resources/ folder structure:
+ * Target platforms must be explicitly specified via the `platforms` property.
+ *
+ * Platform-specific resources can be organized in the resources/ folder structure:
  * - resources/common/ - Universal files (included for all platforms)
  * - resources/macos/ - macOS only (both arm64 and x64)
  * - resources/macos-arm64/ - macOS ARM64 only
