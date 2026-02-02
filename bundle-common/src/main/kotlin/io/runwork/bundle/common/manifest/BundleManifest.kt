@@ -1,5 +1,6 @@
 package io.runwork.bundle.common.manifest
 
+import io.runwork.bundle.common.Platform
 import kotlinx.serialization.Serializable
 
 /**
@@ -7,6 +8,9 @@ import kotlinx.serialization.Serializable
  *
  * The manifest is signed with Ed25519 and contains SHA-256 hashes of all files,
  * enabling integrity verification of the entire bundle.
+ *
+ * This is a multi-platform manifest that supports multiple OS/architecture combinations.
+ * Each platform has its own bundle zip file, and files can be tagged with platform constraints.
  */
 @Serializable
 data class BundleManifest(
@@ -16,30 +20,61 @@ data class BundleManifest(
     /** Monotonically increasing build number */
     val buildNumber: Long,
 
-    /** Platform identifier: macos-arm64, macos-x86_64, windows-x86_64, linux-x86_64 */
-    val platform: String,
-
     /** ISO-8601 timestamp when the bundle was created */
     val createdAt: String,
 
     /** Minimum shell version required to load this bundle */
-    val minimumShellVersion: Int,
+    val minShellVersion: Int,
 
     /** URL where users can download an updated shell application (optional) */
     val shellUpdateUrl: String? = null,
 
-    /** All files in the bundle with their paths, hashes, and sizes */
+    /** All files in the bundle with their paths, hashes, sizes, and optional platform constraints */
     val files: List<BundleFile>,
 
     /** Fully qualified main class name (e.g., "io.runwork.desktop.MainKt") */
     val mainClass: String,
 
-    /** Total size of all files in bytes */
-    val totalSize: Long,
-
-    /** SHA-256 hash of the full bundle.zip, prefixed with "sha256:" */
-    val bundleHash: String,
+    /** Map of platform ID (e.g., "macos-arm64") to platform-specific bundle info */
+    val platformBundles: Map<String, PlatformBundle>,
 
     /** Ed25519 signature of the manifest (excluding this field), prefixed with "ed25519:" */
     val signature: String = "",
-)
+) {
+    /**
+     * Get all files that apply to the given platform.
+     *
+     * This filters files based on their os and arch constraints.
+     * Files with no constraints (os=null, arch=null) are included for all platforms.
+     */
+    fun filesForPlatform(platform: Platform): List<BundleFile> {
+        return files.filter { it.appliesTo(platform) }
+    }
+
+    /**
+     * Check if this manifest supports the given platform.
+     *
+     * A platform is supported if it has an entry in platformBundles.
+     */
+    fun supportsPlatform(platform: Platform): Boolean {
+        return platformBundles.containsKey(platform.toString())
+    }
+
+    /**
+     * Get the total size of files for a specific platform.
+     *
+     * Returns null if the platform is not supported.
+     */
+    fun totalSizeForPlatform(platform: Platform): Long? {
+        return platformBundles[platform.toString()]?.totalSize
+    }
+
+    /**
+     * Get the bundle zip path for a specific platform.
+     *
+     * Returns null if the platform is not supported.
+     */
+    fun bundleZipForPlatform(platform: Platform): String? {
+        return platformBundles[platform.toString()]?.bundleZip
+    }
+}

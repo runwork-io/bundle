@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.download
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.updater.TestFixtures
 import io.runwork.bundle.updater.result.DownloadException
@@ -30,6 +31,7 @@ class DownloadManagerTest {
     private lateinit var storageManager: StorageManager
     private lateinit var mockServer: MockWebServer
     private lateinit var downloadManager: DownloadManager
+    private val platform = Platform.fromString("macos-arm64")
 
     private val json = Json { prettyPrint = true }
 
@@ -39,7 +41,7 @@ class DownloadManagerTest {
         storageManager = StorageManager(tempDir)
         mockServer = MockWebServer()
         mockServer.start()
-        downloadManager = DownloadManager(mockServer.url("/").toString().trimEnd('/'), storageManager)
+        downloadManager = DownloadManager(mockServer.url("/").toString().trimEnd('/'), storageManager, platform)
     }
 
     @AfterTest
@@ -59,7 +61,7 @@ class DownloadManagerTest {
                 )
             ),
             buildNumber = 42,
-            platform = "macos-arm64"
+            platforms = listOf("macos-arm64")
         )
 
         mockServer.enqueue(
@@ -71,7 +73,7 @@ class DownloadManagerTest {
         val result = downloadManager.fetchManifest()
 
         assertEquals(42, result.buildNumber)
-        assertEquals("macos-arm64", result.platform)
+        assertTrue(result.supportsPlatform(platform))
         assertEquals(1, result.files.size)
         assertEquals("app.jar", result.files[0].path)
     }
@@ -375,7 +377,7 @@ class DownloadManagerTest {
                 )
             ),
             buildNumber = 42,
-            platform = "macos-arm64"
+            platforms = listOf("macos-arm64")
         )
 
         val baseUrl = TestFixtures.createFileBundleServer(
@@ -384,12 +386,12 @@ class DownloadManagerTest {
             files = mapOf()
         )
 
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         val result = fileDownloadManager.fetchManifest()
 
         assertEquals(42, result.buildNumber)
-        assertEquals("macos-arm64", result.platform)
+        assertTrue(result.supportsPlatform(platform))
         assertEquals(1, result.files.size)
         assertEquals("app.jar", result.files[0].path)
     }
@@ -400,7 +402,7 @@ class DownloadManagerTest {
         java.nio.file.Files.createDirectories(fileBundleDir)
 
         val baseUrl = fileBundleDir.toUri().toString().trimEnd('/')
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         assertFailsWith<DownloadException> {
             fileDownloadManager.fetchManifest()
@@ -448,7 +450,7 @@ class DownloadManagerTest {
             files = mapOf(hash to content.toByteArray())
         )
 
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         val progressUpdates = mutableListOf<DownloadProgress>()
         val result = fileDownloadManager.downloadBundle(manifest) { progress ->
@@ -502,7 +504,7 @@ class DownloadManagerTest {
             includeZip = true
         )
 
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         val progressUpdates = mutableListOf<DownloadProgress>()
         val result = fileDownloadManager.downloadBundle(manifest) { progress ->
@@ -541,7 +543,7 @@ class DownloadManagerTest {
             files = mapOf() // Empty - no files
         )
 
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         val result = fileDownloadManager.downloadBundle(manifest) {}
 
@@ -575,7 +577,7 @@ class DownloadManagerTest {
             includeZip = true // Use ZIP for full bundle download
         )
 
-        val fileDownloadManager = DownloadManager(baseUrl, storageManager)
+        val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
         var progressCount = 0
         val job = launch {

@@ -1,7 +1,7 @@
 package io.runwork.bundle.creator
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
-import io.runwork.bundle.common.verification.HashVerifier
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -10,27 +10,29 @@ import java.util.zip.ZipOutputStream
  * Packages bundle files into distributable formats.
  *
  * Creates:
- * - bundle.zip: Full bundle archive for initial downloads
+ * - bundle-{platform}.zip: Per-platform bundle archives for initial downloads
  * - files/: Directory of files named by hash for incremental updates
  */
 class BundlePackager {
 
     /**
-     * Package a bundle for distribution.
+     * Package a multi-platform bundle for distribution.
      *
      * @param inputDir Directory containing source files
      * @param outputDir Directory to write output files
-     * @param bundleFiles List of BundleFile entries with hashes
-     * @return Hash of the created bundle.zip
+     * @param bundleFiles List of BundleFile entries with hashes and platform constraints
+     * @param targetPlatforms List of target platform IDs (e.g., ["macos-arm64", "windows-x64"])
+     * @return Map of platform ID to bundle zip filename (e.g., "bundle-macos-arm64.zip")
      */
-    suspend fun packageBundle(
+    fun packageBundle(
         inputDir: File,
         outputDir: File,
         bundleFiles: List<BundleFile>,
-    ): String {
+        targetPlatforms: List<String>,
+    ): Map<String, String> {
         outputDir.mkdirs()
 
-        // Create files/ directory with content-addressable names
+        // Create files/ directory with content-addressable names (all files)
         val filesDir = File(outputDir, "files")
         filesDir.mkdirs()
 
@@ -44,14 +46,25 @@ class BundlePackager {
             }
         }
 
-        // Create bundle.zip
-        val files = bundleFiles.map { bf ->
-            bf.path to File(inputDir, bf.path)
-        }
-        val bundleZip = File(outputDir, "bundle.zip")
-        createZip(bundleZip, files)
+        // Create per-platform zip files
+        val platformBundleZips = mutableMapOf<String, String>()
 
-        return HashVerifier.computeHash(bundleZip.toPath())
+        for (platformId in targetPlatforms) {
+            val platform = Platform.fromString(platformId)
+            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
+
+            val zipFileName = "bundle-$platformId.zip"
+            val bundleZip = File(outputDir, zipFileName)
+
+            val files = platformFiles.map { bf ->
+                bf.path to File(inputDir, bf.path)
+            }
+            createZip(bundleZip, files)
+
+            platformBundleZips[platformId] = zipFileName
+        }
+
+        return platformBundleZips
     }
 
     /**

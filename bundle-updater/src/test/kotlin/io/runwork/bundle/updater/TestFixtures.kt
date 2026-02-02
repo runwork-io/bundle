@@ -2,6 +2,7 @@ package io.runwork.bundle.updater
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
+import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -47,26 +48,39 @@ object TestFixtures {
 
     /**
      * Create a test manifest with the given files.
+     *
+     * @param files List of bundle files
+     * @param buildNumber Build number for the manifest
+     * @param platforms List of platform IDs to include in platformBundles (defaults to ["macos-arm64"])
+     * @param mainClass Main class name
+     * @param minShellVersion Minimum shell version required
+     * @param shellUpdateUrl Optional shell update URL
      */
     fun createTestManifest(
         files: List<BundleFile>,
         buildNumber: Long = 1,
-        platform: String = "macos-arm64",
+        platforms: List<String> = listOf("macos-arm64"),
         mainClass: String = "io.runwork.TestMain",
-        minimumShellVersion: Int = 1,
+        minShellVersion: Int = 1,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
+        val totalSize = files.sumOf { it.size }
+        val platformBundles = platforms.associateWith { platformId ->
+            PlatformBundle(
+                bundleZip = "bundle-$platformId.zip",
+                totalSize = totalSize,
+            )
+        }
+
         return BundleManifest(
             schemaVersion = 1,
             buildNumber = buildNumber,
-            platform = platform,
             createdAt = "2025-01-01T00:00:00Z",
-            minimumShellVersion = minimumShellVersion,
+            minShellVersion = minShellVersion,
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            totalSize = files.sumOf { it.size },
-            bundleHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            platformBundles = platformBundles,
             signature = ""
         )
     }
@@ -78,12 +92,12 @@ object TestFixtures {
         files: List<BundleFile>,
         signer: TestBundleManifestSigner,
         buildNumber: Long = 1,
-        platform: String = "macos-arm64",
+        platforms: List<String> = listOf("macos-arm64"),
         mainClass: String = "io.runwork.TestMain",
-        minimumShellVersion: Int = 1,
+        minShellVersion: Int = 1,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
-        val unsigned = createTestManifest(files, buildNumber, platform, mainClass, minimumShellVersion, shellUpdateUrl)
+        val unsigned = createTestManifest(files, buildNumber, platforms, mainClass, minShellVersion, shellUpdateUrl)
         return signer.signManifest(unsigned)
     }
 
@@ -158,7 +172,7 @@ object TestFixtures {
      * ```
      * baseDir/
      *   manifest.json           # Bundle manifest JSON
-     *   bundle.zip              # Full bundle ZIP (optional)
+     *   bundle-{platform}.zip   # Per-platform bundle ZIPs (optional)
      *   files/
      *     <hash1>               # Individual files by hash (no sha256: prefix)
      *     <hash2>
@@ -167,7 +181,7 @@ object TestFixtures {
      * @param baseDir The directory to create the bundle server in
      * @param manifest The bundle manifest to write
      * @param files Map of hash (with sha256: prefix) to file contents
-     * @param includeZip If true, also creates bundle.zip with all files
+     * @param includeZip If true, also creates platform-specific bundle.zip files
      * @return file:// URL pointing to the bundle server
      */
     fun createFileBundleServer(
@@ -191,10 +205,12 @@ object TestFixtures {
             Files.write(filePath, content)
         }
 
-        // Optionally create bundle.zip
+        // Optionally create platform-specific bundle zips
         if (includeZip) {
-            val zipPath = baseDir.resolve("bundle.zip")
-            createBundleZip(zipPath, manifest, files)
+            for ((platformId, platformBundle) in manifest.platformBundles) {
+                val zipPath = baseDir.resolve(platformBundle.bundleZip)
+                createBundleZip(zipPath, manifest, files)
+            }
         }
 
         return baseDir.toUri().toString().trimEnd('/')
@@ -252,16 +268,8 @@ class TestBundleManifestSigner private constructor(
     }
 
     fun signManifest(manifest: BundleManifest): BundleManifest {
-        // Compute bundle hash
-        val sortedHashes = manifest.files.map { it.hash }.sorted()
-        val combinedHashes = sortedHashes.joinToString("")
-        val bundleHash = "sha256:" + combinedHashes.toByteArray().toByteString().sha256().hex()
-
         // Create manifest without signature for signing
-        val unsignedManifest = manifest.copy(
-            bundleHash = bundleHash,
-            signature = ""
-        )
+        val unsignedManifest = manifest.copy(signature = "")
 
         // Sign the manifest JSON
         val jsonBytes = json.encodeToString(unsignedManifest).toByteArray()

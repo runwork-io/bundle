@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.download
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.updater.TestFixtures
 import io.runwork.bundle.updater.storage.StorageManager
@@ -15,6 +16,7 @@ class UpdateDeciderTest {
 
     private lateinit var tempDir: Path
     private lateinit var storageManager: StorageManager
+    private val platform = Platform.fromString("macos-arm64")
 
     // Overhead per HTTP request (50KB as defined in UpdateDecider)
     private val httpOverhead = 50_000L
@@ -50,7 +52,7 @@ class UpdateDeciderTest {
             )
         )
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.NoDownloadNeeded>(strategy)
     }
@@ -72,7 +74,7 @@ class UpdateDeciderTest {
 
         val manifest = TestFixtures.createTestManifest(files = files)
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.FullBundle>(strategy)
         assertEquals(manifest.files.size, strategy.fileCount)
@@ -110,7 +112,7 @@ class UpdateDeciderTest {
 
         val manifest = TestFixtures.createTestManifest(files = existingFiles + listOf(missingFile))
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         // 100KB + 50KB = 150KB << 9.1MB
         assertIs<DownloadStrategy.Incremental>(strategy)
@@ -152,7 +154,7 @@ class UpdateDeciderTest {
 
         val manifest = TestFixtures.createTestManifest(files = existingFiles + missingFiles)
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         // Effective incremental = 2MB + 200KB = 2.2MB < 5MB full
         assertIs<DownloadStrategy.Incremental>(strategy)
@@ -181,7 +183,7 @@ class UpdateDeciderTest {
             )
         )
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.Incremental>(strategy)
         assertEquals(1, strategy.files.size)
@@ -204,10 +206,10 @@ class UpdateDeciderTest {
 
         val manifest = TestFixtures.createTestManifest(files = files)
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.FullBundle>(strategy)
-        assertEquals(manifest.totalSize, strategy.totalSize)
+        assertEquals(manifest.totalSizeForPlatform(platform), strategy.totalSize)
         assertEquals(3, strategy.fileCount)
     }
 
@@ -215,7 +217,7 @@ class UpdateDeciderTest {
     fun decide_emptyManifest_returnsNoDownloadNeeded() = runTest {
         val manifest = TestFixtures.createTestManifest(files = emptyList())
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.NoDownloadNeeded>(strategy)
     }
@@ -246,7 +248,7 @@ class UpdateDeciderTest {
 
         val manifest = TestFixtures.createTestManifest(files = existingFiles + missingFile)
 
-        val strategy = UpdateDecider.decide(manifest, storageManager.contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.Incremental>(strategy)
         assertEquals(100_000L, strategy.totalSize)

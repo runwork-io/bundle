@@ -91,18 +91,19 @@ class BundleBootstrap(
             return BundleValidationResult.Failed("Manifest signature verification failed")
         }
 
-        // Check platform
-        if (manifest.platform != config.platform.toString()) {
+        // Check platform support
+        if (!manifest.supportsPlatform(config.platform)) {
+            val supportedPlatforms = manifest.platformBundles.keys.sorted().joinToString(", ")
             return BundleValidationResult.Failed(
-                "Platform mismatch: manifest is for ${manifest.platform}, but running on ${config.platform}"
+                "Platform ${config.platform} not supported. Supported platforms: $supportedPlatforms"
             )
         }
 
         // Check shell version
-        if (config.shellVersion < manifest.minimumShellVersion) {
+        if (config.shellVersion < manifest.minShellVersion) {
             return BundleValidationResult.ShellUpdateRequired(
                 currentVersion = config.shellVersion,
-                requiredVersion = manifest.minimumShellVersion,
+                requiredVersion = manifest.minShellVersion,
                 updateUrl = manifest.shellUpdateUrl,
             )
         }
@@ -119,13 +120,14 @@ class BundleBootstrap(
             return BundleValidationResult.NoBundleExists
         }
 
-        // Verify CAS files and repair version directory links (parallel with limit of 5)
-        val totalFiles = manifest.files.size
+        // Filter files for current platform and verify CAS files (parallel with limit of 5)
+        val platformFiles = manifest.filesForPlatform(config.platform)
+        val totalFiles = platformFiles.size
         onProgress(BundleBootstrapProgress.VerifyingFiles(0, totalFiles))
 
         val semaphore = Semaphore(5)
         val failures = coroutineScope {
-            manifest.files.map { file ->
+            platformFiles.map { file ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
                         verifyFileAndLink(file, versionDir)
@@ -165,8 +167,8 @@ class BundleBootstrap(
         val manifest = validation.manifest
         val versionPath = validation.versionPath
 
-        // Collect all JARs
-        val jarUrls = manifest.files
+        // Collect JARs for current platform
+        val jarUrls = manifest.filesForPlatform(config.platform)
             .filter { it.path.endsWith(".jar", ignoreCase = true) }
             .map { versionPath.resolve(it.path).toUri().toURL() }
             .toTypedArray()

@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.storage
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.updater.TestFixtures
 import kotlinx.coroutines.test.runTest
@@ -19,6 +20,7 @@ class StorageManagerTest {
 
     private lateinit var tempDir: Path
     private lateinit var storageManager: StorageManager
+    private val platform = Platform.fromString("macos-arm64")
 
     @BeforeTest
     fun setUp() {
@@ -94,7 +96,7 @@ class StorageManagerTest {
             buildNumber = 42
         )
 
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
         // Verify version directory exists with file
         val versionDir = storageManager.getVersionPath(42)
@@ -122,7 +124,7 @@ class StorageManagerTest {
             buildNumber = 42
         )
 
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
         val versionDir = storageManager.getVersionPath(42)
         assertTrue(Files.exists(versionDir.resolve("natives/macos/libfoo.dylib")))
@@ -143,8 +145,8 @@ class StorageManagerTest {
         )
 
         // Call prepareVersion twice - should not throw
-        storageManager.prepareVersion(manifest)
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
+        storageManager.prepareVersion(manifest, platform)
 
         val versionDir = storageManager.getVersionPath(42)
         assertTrue(Files.exists(versionDir.resolve("file.txt")))
@@ -164,7 +166,7 @@ class StorageManagerTest {
         )
 
         assertFailsWith<IllegalStateException> {
-            storageManager.prepareVersion(manifest)
+            storageManager.prepareVersion(manifest, platform)
         }
     }
 
@@ -220,9 +222,9 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
-        val failures = storageManager.verifyVersion(manifest)
+        val failures = storageManager.verifyVersion(manifest, platform)
 
         assertTrue(failures.isEmpty())
     }
@@ -240,13 +242,13 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
         // Tamper with the file
         val versionDir = storageManager.getVersionPath(42)
         Files.writeString(versionDir.resolve("file.txt"), "Tampered content")
 
-        val failures = storageManager.verifyVersion(manifest)
+        val failures = storageManager.verifyVersion(manifest, platform)
 
         assertEquals(1, failures.size)
         assertEquals("file.txt", failures[0].path)
@@ -267,13 +269,13 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
         // Delete the file
         val versionDir = storageManager.getVersionPath(42)
         Files.delete(versionDir.resolve("file.txt"))
 
-        val failures = storageManager.verifyVersion(manifest)
+        val failures = storageManager.verifyVersion(manifest, platform)
 
         assertEquals(1, failures.size)
         assertEquals("file.txt", failures[0].path)

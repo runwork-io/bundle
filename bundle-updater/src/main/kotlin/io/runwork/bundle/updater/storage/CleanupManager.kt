@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.storage
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.updater.result.CleanupResult
 import java.nio.file.Path
@@ -13,6 +14,7 @@ import java.nio.file.Path
 class CleanupManager(
     private val storageManager: StorageManager,
     @Suppress("unused") private val bundleDir: Path,
+    private val platform: Platform,
 ) {
     /**
      * Perform cleanup of old versions and orphaned CAS files.
@@ -53,8 +55,8 @@ class CleanupManager(
             }
         }
 
-        // 3. Find and delete orphaned CAS files (not needed by current version)
-        val referencedHashes = currentManifest.files
+        // 3. Find and delete orphaned CAS files (not needed by current version for this platform)
+        val referencedHashes = currentManifest.filesForPlatform(platform)
             .map { it.hash }
             .toSet()
 

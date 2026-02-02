@@ -40,8 +40,8 @@ class BundleUpdater(
     private val config: BundleUpdaterConfig
 ) : Closeable {
     private val storageManager = StorageManager(config.bundleDir)
-    private val cleanupManager = CleanupManager(storageManager, config.bundleDir)
-    private val downloadManager = DownloadManager(config.baseUrl, storageManager)
+    private val cleanupManager = CleanupManager(storageManager, config.bundleDir, config.platform)
+    private val downloadManager = DownloadManager(config.baseUrl, storageManager, config.platform)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -156,7 +156,7 @@ class BundleUpdater(
             }
 
             // Determine download strategy to get size info
-            val strategy = UpdateDecider.decide(manifest, downloadManager.contentStore)
+            val strategy = UpdateDecider.decide(manifest, config.platform, downloadManager.contentStore)
 
             val info = when (strategy) {
                 is DownloadStrategy.NoDownloadNeeded -> {
@@ -251,11 +251,12 @@ class BundleUpdater(
                 return ManifestFetchResult.SignatureFailure("Manifest signature verification failed")
             }
 
-            // Verify platform matches
-            if (manifest.platform != config.platform.toString()) {
+            // Verify platform is supported
+            if (!manifest.supportsPlatform(config.platform)) {
+                val supported = manifest.platformBundles.keys.sorted().joinToString(", ")
                 return ManifestFetchResult.PlatformMismatch(
                     expected = config.platform.toString(),
-                    actual = manifest.platform
+                    actual = supported
                 )
             }
 
@@ -267,8 +268,8 @@ class BundleUpdater(
 
     private suspend fun finalizeUpdate(manifest: BundleManifest) {
         storageManager.withStorageLock {
-            // Prepare version directory (hard links from CAS)
-            storageManager.prepareVersion(manifest)
+            // Prepare version directory (hard links from CAS for this platform's files)
+            storageManager.prepareVersion(manifest, config.platform)
 
             // Save manifest
             storageManager.saveManifest(json.encodeToString(manifest))
@@ -313,7 +314,7 @@ class BundleUpdater(
             }
 
             // Determine download strategy
-            val strategy = UpdateDecider.decide(manifest, downloadManager.contentStore)
+            val strategy = UpdateDecider.decide(manifest, config.platform, downloadManager.contentStore)
 
             if (strategy is DownloadStrategy.NoDownloadNeeded) {
                 // Files already in CAS, just finalize

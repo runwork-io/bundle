@@ -2,6 +2,7 @@ package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
+import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
 import java.nio.file.Files
@@ -42,22 +43,28 @@ object TestFixtures {
     fun createTestManifest(
         files: List<BundleFile>,
         buildNumber: Long = 1,
-        platform: String = "macos-arm64",
+        platforms: List<String> = listOf("macos-arm64"),
         mainClass: String = "io.runwork.TestMain",
-        minimumShellVersion: Int = 1,
+        minShellVersion: Int = 1,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
+        val totalSize = files.sumOf { it.size }
+        val platformBundles = platforms.associateWith { platformId ->
+            PlatformBundle(
+                bundleZip = "bundle-$platformId.zip",
+                totalSize = totalSize,
+            )
+        }
+
         return BundleManifest(
             schemaVersion = 1,
             buildNumber = buildNumber,
-            platform = platform,
             createdAt = "2025-01-01T00:00:00Z",
-            minimumShellVersion = minimumShellVersion,
+            minShellVersion = minShellVersion,
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            totalSize = files.sumOf { it.size },
-            bundleHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            platformBundles = platformBundles,
             signature = ""
         )
     }
@@ -69,12 +76,12 @@ object TestFixtures {
         files: List<BundleFile>,
         signer: BundleManifestSigner,
         buildNumber: Long = 1,
-        platform: String = "macos-arm64",
+        platforms: List<String> = listOf("macos-arm64"),
         mainClass: String = "io.runwork.TestMain",
-        minimumShellVersion: Int = 1,
+        minShellVersion: Int = 1,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
-        val unsigned = createTestManifest(files, buildNumber, platform, mainClass, minimumShellVersion, shellUpdateUrl)
+        val unsigned = createTestManifest(files, buildNumber, platforms, mainClass, minShellVersion, shellUpdateUrl)
         return signer.signManifest(unsigned)
     }
 

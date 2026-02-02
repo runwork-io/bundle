@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.download
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
@@ -28,7 +29,7 @@ object UpdateDecider {
      * Decide whether to download the full bundle ZIP or individual files.
      *
      * The decision is based on effective download cost:
-     * - Full bundle: totalSize bytes
+     * - Full bundle: totalSize bytes (for the platform-specific bundle)
      * - Incremental: sum of file sizes + HTTP overhead per file
      *
      * This accounts for the latency cost of many small HTTP requests,
@@ -36,12 +37,20 @@ object UpdateDecider {
      * even when the total bytes are smaller.
      *
      * @param manifest The new bundle manifest
+     * @param platform The target platform to filter files for
      * @param contentStore Content store to check existing files
      * @return Download strategy with list of files to download
      */
-    suspend fun decide(manifest: BundleManifest, contentStore: ContentAddressableStore): DownloadStrategy {
+    suspend fun decide(
+        manifest: BundleManifest,
+        platform: Platform,
+        contentStore: ContentAddressableStore
+    ): DownloadStrategy {
+        // Get files for this platform
+        val platformFiles = manifest.filesForPlatform(platform)
+
         // Find files that are not in the CAS
-        val missingFiles = manifest.files.filter { file ->
+        val missingFiles = platformFiles.filter { file ->
             !contentStore.contains(file.hash)
         }
 
@@ -55,14 +64,14 @@ object UpdateDecider {
         val incrementalOverhead = missingFiles.size * HTTP_REQUEST_OVERHEAD_BYTES
         val effectiveIncrementalSize = incrementalDataSize + incrementalOverhead
 
-        // Full bundle is one request, so overhead is minimal
-        val fullSize = manifest.totalSize
+        // Full bundle size for this platform
+        val fullSize = manifest.totalSizeForPlatform(platform) ?: platformFiles.sumOf { it.size }
 
         // Choose the strategy with lower effective cost
         return if (fullSize <= effectiveIncrementalSize) {
             DownloadStrategy.FullBundle(
                 totalSize = fullSize,
-                fileCount = manifest.files.size
+                fileCount = platformFiles.size
             )
         } else {
             DownloadStrategy.Incremental(
