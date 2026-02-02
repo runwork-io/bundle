@@ -162,10 +162,12 @@ class BundleManifestBuilder {
     /**
      * Detect target platforms from the resources directory structure.
      *
-     * Scans resources/ subdirectories for platform-specific folders.
+     * Scans resources/ subdirectories for platform-specific folders:
+     * - Full platform IDs (e.g., "macos-arm64") are detected directly
+     * - OS-only folders (e.g., "macos") are expanded to all architectures for that OS
      *
      * @param inputDir Directory to scan
-     * @return List of platform IDs found (e.g., ["macos-arm64", "windows-x64"])
+     * @return List of platform IDs found (e.g., ["macos-arm64", "macos-x64", "windows-x64"])
      */
     fun detectPlatforms(inputDir: File): List<String> {
         val resourcesDir = File(inputDir, "resources")
@@ -173,10 +175,13 @@ class BundleManifestBuilder {
             return listOf()
         }
 
-        return resourcesDir.listFiles()
+        val platforms = mutableSetOf<String>()
+
+        resourcesDir.listFiles()
             ?.filter { it.isDirectory && it.name != "common" }
-            ?.mapNotNull { folder ->
+            ?.forEach { folder ->
                 val name = folder.name
+
                 // Check if it's a full platform ID (os-arch)
                 if (name.contains('-')) {
                     val parts = name.split('-')
@@ -188,15 +193,21 @@ class BundleManifestBuilder {
                             null
                         }
                         if (os != null && arch != null) {
-                            return@mapNotNull "${os.id}-${arch.id}"
+                            platforms.add("${os.id}-${arch.id}")
+                        }
+                    }
+                } else {
+                    // Check if it's an OS-only folder - expand to all architectures
+                    val os = Os.entries.find { it.id == name }
+                    if (os != null) {
+                        for (arch in Arch.entries) {
+                            platforms.add("${os.id}-${arch.id}")
                         }
                     }
                 }
-                null
             }
-            ?.distinct()
-            ?.sorted()
-            ?: listOf()
+
+        return platforms.sorted()
     }
 
     /**
@@ -214,5 +225,38 @@ class BundleManifestBuilder {
                 relativePath to file
             }
             .toList()
+    }
+
+    /**
+     * Compute a content fingerprint for a set of files.
+     * Uses SHA-256 of sorted file hashes to create a unique identifier.
+     *
+     * @param files List of BundleFile entries
+     * @return Short hash prefix (first 8 chars) for use in zip filename
+     */
+    fun computeContentFingerprint(files: List<BundleFile>): String {
+        val sortedHashes = files.map { it.hash }.sorted().joinToString(",")
+        val fullHash = HashVerifier.computeHash(sortedHashes.toByteArray())
+        // Return first 8 chars of hash (without "sha256:" prefix) for filename
+        return fullHash.removePrefix("sha256:").take(8)
+    }
+
+    /**
+     * Group platforms by their content fingerprint.
+     * Platforms with identical file sets share the same fingerprint.
+     *
+     * @param bundleFiles List of all BundleFile entries
+     * @param targetPlatforms List of target platform IDs
+     * @return Map of fingerprint to list of platform IDs
+     */
+    fun groupPlatformsByContent(
+        bundleFiles: List<BundleFile>,
+        targetPlatforms: List<String>,
+    ): Map<String, List<String>> {
+        return targetPlatforms.groupBy { platformId ->
+            val platform = Platform.fromString(platformId)
+            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
+            computeContentFingerprint(platformFiles)
+        }
     }
 }

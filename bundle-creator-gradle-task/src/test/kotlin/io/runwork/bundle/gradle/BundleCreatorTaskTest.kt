@@ -139,9 +139,11 @@ class BundleCreatorTaskTest {
         val verifier = SignatureVerifier(publicKey)
         assertTrue(verifier.verifyManifest(manifest), "Manifest signature should be valid")
 
-        // Verify bundle-macos-arm64.zip exists and contains files
-        val bundleZip = File(outputDir, "bundle-macos-arm64.zip")
-        assertTrue(bundleZip.exists(), "bundle-macos-arm64.zip should exist")
+        // Verify bundle zip exists and contains files (now content-addressed)
+        val bundleZipName = manifest.platformBundles["macos-arm64"]?.bundleZip
+        assertNotNull(bundleZipName, "Platform bundle should exist for macos-arm64")
+        val bundleZip = File(outputDir, bundleZipName)
+        assertTrue(bundleZip.exists(), "$bundleZipName should exist")
 
         ZipFile(bundleZip).use { zip ->
             val entries = zip.entries().toList().map { it.name }

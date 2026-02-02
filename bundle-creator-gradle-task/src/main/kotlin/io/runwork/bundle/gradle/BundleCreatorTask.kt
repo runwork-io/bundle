@@ -1,12 +1,9 @@
 package io.runwork.bundle.gradle
 
-import io.runwork.bundle.common.Arch
-import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
-import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
-import io.runwork.bundle.common.verification.HashVerifier
+import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -63,6 +60,8 @@ import java.util.zip.ZipOutputStream
  * ```
  */
 abstract class BundleCreatorTask : DefaultTask() {
+
+    private val manifestBuilder = BundleManifestBuilder()
 
     /**
      * Directory containing files to bundle.
@@ -172,7 +171,7 @@ abstract class BundleCreatorTask : DefaultTask() {
         val targetPlatforms = if (platforms.isPresent && platforms.get().isNotEmpty()) {
             platforms.get()
         } else {
-            detectPlatforms(inputDir).also {
+            manifestBuilder.detectPlatforms(inputDir).also {
                 if (it.isEmpty()) {
                     throw GradleException(
                         "No target platforms specified and none detected from resources/ folder. " +
@@ -205,7 +204,7 @@ abstract class BundleCreatorTask : DefaultTask() {
 
         // Collect files with platform constraints
         val bundleFiles = runBlocking {
-            collectFilesWithPlatformConstraints(inputDir)
+            manifestBuilder.collectFilesWithPlatformConstraints(inputDir)
         }
 
         logger.lifecycle("Creating multi-platform bundle:")
@@ -229,24 +228,31 @@ abstract class BundleCreatorTask : DefaultTask() {
             }
         }
 
-        // Create per-platform zip files
+        // Group platforms by content fingerprint to deduplicate identical zips
+        val platformGroups = manifestBuilder.groupPlatformsByContent(bundleFiles, targetPlatforms)
         val platformBundleZips = mutableMapOf<String, String>()
 
-        for (platformId in targetPlatforms) {
-            val platform = Platform.fromString(platformId)
-            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
-
-            val zipFileName = "bundle-$platformId.zip"
+        for ((fingerprint, platforms) in platformGroups) {
+            // Content-addressable zip filename
+            val zipFileName = "bundle-$fingerprint.zip"
             val bundleZip = File(outputDir, zipFileName)
 
+            // Get files for this content (all platforms in group have same files)
+            val platform = Platform.fromString(platforms.first())
+            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
+
+            // Create the zip once
             val files = platformFiles.map { bf ->
                 bf.path to File(inputDir, bf.path)
             }
             createBundleZip(bundleZip, files)
 
-            platformBundleZips[platformId] = zipFileName
+            // Point all platforms in the group to this zip
+            for (platformId in platforms) {
+                platformBundleZips[platformId] = zipFileName
+            }
 
-            logger.lifecycle("  Created $zipFileName (${platformFiles.size} files)")
+            logger.lifecycle("  Created $zipFileName (${platformFiles.size} files) for: ${platforms.joinToString(", ")}")
         }
 
         // Build platform bundles map with total sizes
@@ -287,9 +293,12 @@ abstract class BundleCreatorTask : DefaultTask() {
         logger.lifecycle("")
         logger.lifecycle("Files created:")
         logger.lifecycle("  manifest.json - Signed multi-platform manifest")
-        for (platformId in targetPlatforms) {
-            val totalSize = platformBundlesMap[platformId]!!.totalSize
-            logger.lifecycle("  bundle-$platformId.zip - ${totalSize / 1024 / 1024} MB")
+        // List unique zip files
+        val uniqueZips = platformBundleZips.entries.groupBy({ it.value }, { it.key })
+        for ((zipName, platformsForZip) in uniqueZips) {
+            val totalSize = platformBundlesMap[platformsForZip.first()]!!.totalSize
+            val sizeMb = totalSize / 1024 / 1024
+            logger.lifecycle("  $zipName - $sizeMb MB (${platformsForZip.joinToString(", ")})")
         }
         logger.lifecycle("  files/ - Individual files by hash (for incremental updates)")
     }
@@ -314,100 +323,6 @@ abstract class BundleCreatorTask : DefaultTask() {
                 throw GradleException("One of privateKey, privateKeyEnvVar, or privateKeyFile must be set")
             }
         }
-    }
-
-    private suspend fun collectFilesWithPlatformConstraints(inputDir: File): List<BundleFile> {
-        val bundleFiles = mutableListOf<BundleFile>()
-        for (file in inputDir.walkTopDown().filter { it.isFile }) {
-            val relativePath = file.relativeTo(inputDir).path
-                .replace(File.separatorChar, '/') // Normalize to forward slashes
-
-            val (os, arch) = detectPlatformConstraints(relativePath)
-
-            bundleFiles.add(
-                BundleFile(
-                    path = relativePath,
-                    hash = HashVerifier.computeHash(file.toPath()),
-                    size = file.length(),
-                    os = os,
-                    arch = arch,
-                )
-            )
-        }
-        return bundleFiles
-    }
-
-    private fun detectPlatformConstraints(relativePath: String): Pair<Os?, Arch?> {
-        // Check if path starts with resources/
-        if (!relativePath.startsWith("resources/")) {
-            return null to null // Universal file
-        }
-
-        // Extract the platform folder name (first segment after resources/)
-        val pathAfterResources = relativePath.removePrefix("resources/")
-        val platformFolder = pathAfterResources.substringBefore('/')
-
-        // Handle common/ folder
-        if (platformFolder == "common") {
-            return null to null // Universal file
-        }
-
-        // Try to parse as platform (os-arch)
-        if (platformFolder.contains('-')) {
-            val parts = platformFolder.split('-')
-            if (parts.size == 2) {
-                val os = Os.entries.find { it.id == parts[0] }
-                val arch = try {
-                    Arch.fromId(parts[1])
-                } catch (_: IllegalArgumentException) {
-                    null
-                }
-                if (os != null && arch != null) {
-                    return os to arch
-                }
-            }
-        }
-
-        // Try to parse as OS only (e.g., "macos", "windows", "linux")
-        val os = Os.entries.find { it.id == platformFolder }
-        if (os != null) {
-            return os to null
-        }
-
-        // Unknown folder - treat as universal
-        return null to null
-    }
-
-    private fun detectPlatforms(inputDir: File): List<String> {
-        val resourcesDir = File(inputDir, "resources")
-        if (!resourcesDir.exists() || !resourcesDir.isDirectory) {
-            return listOf()
-        }
-
-        return resourcesDir.listFiles()
-            ?.filter { it.isDirectory && it.name != "common" }
-            ?.mapNotNull { folder ->
-                val name = folder.name
-                // Check if it's a full platform ID (os-arch)
-                if (name.contains('-')) {
-                    val parts = name.split('-')
-                    if (parts.size == 2) {
-                        val os = Os.entries.find { it.id == parts[0] }
-                        val arch = try {
-                            Arch.fromId(parts[1])
-                        } catch (_: IllegalArgumentException) {
-                            null
-                        }
-                        if (os != null && arch != null) {
-                            return@mapNotNull "${os.id}-${arch.id}"
-                        }
-                    }
-                }
-                null
-            }
-            ?.distinct()
-            ?.sorted()
-            ?: listOf()
     }
 
     private fun createBundleZip(output: File, files: List<Pair<String, File>>) {
