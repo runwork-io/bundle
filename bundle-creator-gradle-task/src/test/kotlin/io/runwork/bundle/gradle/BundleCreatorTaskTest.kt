@@ -1,5 +1,6 @@
 package io.runwork.bundle.gradle
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.creator.BundleManifestSigner
@@ -107,7 +108,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(12345L)
                 privateKeyFile.set(file("private.key"))
             }
@@ -129,7 +130,7 @@ class BundleCreatorTaskTest {
 
         val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
         assertEquals(12345L, manifest.buildNumber)
-        assertEquals("macos-arm64", manifest.platform)
+        assertTrue(manifest.supportsPlatform(Platform.fromString("macos-arm64")))
         assertEquals("com.test.MainKt", manifest.mainClass)
         assertTrue(manifest.signature.startsWith("ed25519:"))
         assertEquals(2, manifest.files.size)
@@ -138,9 +139,11 @@ class BundleCreatorTaskTest {
         val verifier = SignatureVerifier(publicKey)
         assertTrue(verifier.verifyManifest(manifest), "Manifest signature should be valid")
 
-        // Verify bundle.zip exists and contains files
-        val bundleZip = File(outputDir, "bundle.zip")
-        assertTrue(bundleZip.exists(), "bundle.zip should exist")
+        // Verify bundle zip exists and contains files (now content-addressed)
+        val bundleZipName = manifest.platformBundles["macos-arm64"]?.bundleZip
+        assertNotNull(bundleZipName, "Platform bundle should exist for macos-arm64")
+        val bundleZip = File(outputDir, bundleZipName)
+        assertTrue(bundleZip.exists(), "$bundleZipName should exist")
 
         ZipFile(bundleZip).use { zip ->
             val entries = zip.entries().toList().map { it.name }
@@ -174,7 +177,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(1L)
                 privateKeyEnvVar.set("TEST_BUNDLE_KEY")
             }
@@ -215,7 +218,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(1L)
                 // Use the privateKey property directly with a provider
                 privateKey.set(providers.gradleProperty("bundlePrivateKey"))
@@ -248,7 +251,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("linux-x86_64")
+                platforms.set(listOf("linux-x64"))
                 buildNumber.set(999L)
                 minShellVersion.set(5)
                 shellUpdateUrl.set("https://example.com/update")
@@ -267,9 +270,9 @@ class BundleCreatorTaskTest {
         val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
         val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
 
-        assertEquals("linux-x86_64", manifest.platform)
+        assertTrue(manifest.supportsPlatform(Platform.fromString("linux-x64")))
         assertEquals(999L, manifest.buildNumber)
-        assertEquals(5, manifest.minimumShellVersion)
+        assertEquals(5, manifest.minShellVersion)
         assertEquals("https://example.com/update", manifest.shellUpdateUrl)
     }
 
@@ -283,7 +286,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(1L)
                 // No private key set
             }
@@ -296,6 +299,31 @@ class BundleCreatorTaskTest {
             .buildAndFail()
 
         assertTrue(result.output.contains("privateKey, privateKeyEnvVar, or privateKeyFile"))
+    }
+
+    @Test
+    fun taskFailsWithInvalidPlatform() {
+        File(inputDir, "test.txt").writeText("Content")
+
+        writeBuildFile(
+            """
+            tasks.register<BundleCreatorTask>("createBundle") {
+                inputDirectory.set(file("input"))
+                outputDirectory.set(layout.buildDirectory.dir("bundle"))
+                mainClass.set("com.test.MainKt")
+                platforms.set(listOf("invalid-platform"))
+                buildNumber.set(1L)
+                privateKeyFile.set(file("private.key"))
+            }
+            """.trimIndent()
+        )
+
+        val result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments("createBundle", "--stacktrace")
+            .buildAndFail()
+
+        assertTrue(result.output.contains("Invalid platform 'invalid-platform'"))
     }
 
     @Test
@@ -328,7 +356,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(1L)
                 privateKeyFile.set(file("private.key"))
             }
@@ -345,7 +373,7 @@ class BundleCreatorTaskTest {
         val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
         val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
 
-        assertEquals(300L, manifest.totalSize)
+        assertEquals(300L, manifest.totalSizeForPlatform(Platform.fromString("macos-arm64")))
     }
 
     @Test
@@ -359,7 +387,7 @@ class BundleCreatorTaskTest {
                 inputDirectory.set(file("input"))
                 outputDirectory.set(layout.buildDirectory.dir("bundle"))
                 mainClass.set("com.test.MainKt")
-                platform.set("macos-arm64")
+                platforms.set(listOf("macos-arm64"))
                 buildNumber.set(1L)
                 privateKeyFile.set(file("private.key"))
             }

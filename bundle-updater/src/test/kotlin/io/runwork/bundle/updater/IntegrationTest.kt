@@ -104,9 +104,11 @@ class IntegrationTest {
 
         // Step 2: Download bundle using DownloadManager directly to bypass BundleUpdater complexity
         val storageManager = io.runwork.bundle.updater.storage.StorageManager(appDataDir)
+        val platform = Platform.fromString("macos-arm64")
         val downloadManager = io.runwork.bundle.updater.download.DownloadManager(
             mockServer.url("/").toString().trimEnd('/'),
-            storageManager
+            storageManager,
+            platform
         )
 
         val progressUpdates = mutableListOf<DownloadProgress>()
@@ -120,7 +122,7 @@ class IntegrationTest {
         assertIs<DownloadResult.Success>(downloadResult)
 
         // Manually finalize: prepare version and save manifest
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
         storageManager.saveManifest(json.encodeToString(manifest))
 
         // Step 3: Validate succeeds after download
@@ -193,9 +195,11 @@ class IntegrationTest {
 
         // Use DownloadManager directly to simulate bundle self-update
         val storageManager = io.runwork.bundle.updater.storage.StorageManager(appDataDir)
+        val platform = Platform.fromString("macos-arm64")
         val downloadManager = io.runwork.bundle.updater.download.DownloadManager(
             mockServer.url("/").toString().trimEnd('/'),
-            storageManager
+            storageManager,
+            platform
         )
 
         // Step 1: Fetch manifest to check for update
@@ -214,7 +218,7 @@ class IntegrationTest {
         assertIs<DownloadResult.Success>(downloadResult)
 
         // Step 3: Prepare new version
-        storageManager.prepareVersion(fetchedManifest)
+        storageManager.prepareVersion(fetchedManifest, platform)
         storageManager.saveManifest(json.encodeToString(fetchedManifest))
 
         // Verify new version is prepared
@@ -234,6 +238,7 @@ class IntegrationTest {
     fun bundleCreator_createsSignedBundle() = runBlocking {
         val inputDir = createTempDir("integration-creator-input")
         val outputDir = createTempDir("integration-creator-output")
+        val targetPlatforms = listOf("macos-arm64")
 
         // Create input files
         TestFixtures.createTestFile(inputDir, "app.jar", "jar-content")
@@ -247,39 +252,32 @@ class IntegrationTest {
         val builder = BundleManifestBuilder()
         val packager = BundlePackager()
 
-        // Step 1: Collect files
-        val collectedFiles = builder.collectFiles(inputDir.toFile())
-        assertEquals(4, collectedFiles.size)
+        // Step 1: Collect files with platform constraints
+        val bundleFiles = builder.collectFilesWithPlatformConstraints(inputDir.toFile())
+        assertEquals(4, bundleFiles.size)
 
-        // Step 2: Create bundle files with hashes
-        val bundleFiles = collectedFiles.map { (path, file) ->
-            BundleFile(
-                path = path,
-                hash = TestFixtures.computeHash(file.toPath()),
-                size = file.length(),
-            )
-        }
+        // Step 2: Package bundles for each platform
+        val platformBundleZips = packager.packageBundle(inputDir.toFile(), outputDir.toFile(), bundleFiles, targetPlatforms)
+        assertEquals(1, platformBundleZips.size)
+        assertTrue(platformBundleZips.containsKey("macos-arm64"))
 
-        // Step 3: Package bundle
-        val bundleHash = packager.packageBundle(inputDir.toFile(), outputDir.toFile(), bundleFiles)
-        assertTrue(bundleHash.startsWith("sha256:"))
-
-        // Step 4: Build manifest
+        // Step 3: Build manifest
         val manifest = builder.build(
             inputDir = inputDir.toFile(),
-            platform = "macos-arm64",
+            targetPlatforms = targetPlatforms,
             buildNumber = 12345,
             mainClass = "com.example.MainKt",
             minShellVersion = 1,
-            bundleHash = bundleHash,
+            platformBundleHashes = platformBundleZips,
         )
 
-        // Step 5: Sign manifest
+        // Step 4: Sign manifest
         val signedManifest = signer.signManifest(manifest)
         assertTrue(signedManifest.signature.startsWith("ed25519:"))
 
-        // Step 6: Verify output structure
-        assertTrue(Files.exists(outputDir.resolve("bundle.zip")))
+        // Step 5: Verify output structure
+        val bundleZipName = platformBundleZips["macos-arm64"]!!
+        assertTrue(Files.exists(outputDir.resolve(bundleZipName)), "Bundle zip should exist: $bundleZipName")
         assertTrue(Files.isDirectory(outputDir.resolve("files")))
 
         // Verify files/ contains hash-named files
@@ -382,7 +380,7 @@ class IntegrationTest {
             files = files,
             signer = keyPair.signer,
             buildNumber = 42,
-            minimumShellVersion = 5, // Requires shell v5
+            minShellVersion = 5, // Requires shell v5
             shellUpdateUrl = "https://example.com/download",
         )
 
@@ -497,9 +495,11 @@ class IntegrationTest {
 
         // Use DownloadManager directly
         val storageManager = io.runwork.bundle.updater.storage.StorageManager(appDataDir)
+        val platform = Platform.fromString("macos-arm64")
         val downloadManager = io.runwork.bundle.updater.download.DownloadManager(
             mockServer.url("/").toString().trimEnd('/'),
-            storageManager
+            storageManager,
+            platform
         )
 
         val progressUpdates = mutableListOf<DownloadProgress>()
@@ -516,7 +516,7 @@ class IntegrationTest {
         assertEquals("/files/$newHash", request.path)
 
         // Finalize: prepare version
-        storageManager.prepareVersion(manifest)
+        storageManager.prepareVersion(manifest, platform)
 
         // Verify both files are in version directory
         assertTrue(Files.exists(appDataDir.resolve("versions/100/existing.jar")))

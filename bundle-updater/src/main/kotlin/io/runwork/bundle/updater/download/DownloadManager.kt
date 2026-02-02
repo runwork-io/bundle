@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.download
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.updater.result.DownloadException
@@ -37,10 +38,12 @@ import kotlin.coroutines.resumeWithException
  * - Resume support via existing file hash checking
  * - Automatic hash verification after download
  * - Support for file:// URLs for local testing
+ * - Multi-platform support with per-platform bundle downloads
  */
 class DownloadManager(
     private val baseUrl: String,
     private val storageManager: StorageManager,
+    private val platform: Platform,
 ) : Closeable {
     private val client = OkHttpClient.Builder()
         .connectTimeout(Duration.ofSeconds(30))
@@ -156,7 +159,7 @@ class DownloadManager(
         manifest: BundleManifest,
         progressCallback: suspend (DownloadProgress) -> Unit
     ): DownloadResult = withContext(Dispatchers.IO) {
-        val strategy = UpdateDecider.decide(manifest, contentStore)
+        val strategy = UpdateDecider.decide(manifest, platform, contentStore)
 
         when (strategy) {
             is DownloadStrategy.NoDownloadNeeded -> {
@@ -181,8 +184,15 @@ class DownloadManager(
         val tempZip = storageManager.createTempFile("bundle")
 
         try {
+            // Get platform-specific bundle URL
+            val bundleZipPath = manifest.bundleZipForPlatform(platform)
+                ?: throw DownloadException("No bundle zip available for platform: $platform")
+
+            // Resolve relative URL from manifest location
+            val bundleUrl = resolveRelativeUrl(baseUrl, bundleZipPath)
+
             downloadFile(
-                url = "$baseUrl/bundle.zip",
+                url = bundleUrl,
                 destPath = tempZip,
                 expectedSize = strategy.totalSize,
                 progressCallback = { downloaded, total ->
@@ -190,7 +200,7 @@ class DownloadManager(
                         DownloadProgress(
                             bytesDownloaded = downloaded,
                             totalBytes = total,
-                            currentFile = "bundle.zip",
+                            currentFile = bundleZipPath,
                             filesCompleted = 0,
                             totalFiles = 1
                         )
@@ -198,7 +208,7 @@ class DownloadManager(
                 }
             )
 
-            // Extract and store files from ZIP
+            // Extract and store files from ZIP (only files for this platform)
             extractAndStoreBundle(tempZip, manifest)
 
             DownloadResult.Success(manifest.buildNumber)
@@ -209,6 +219,20 @@ class DownloadManager(
         } finally {
             Files.deleteIfExists(tempZip)
         }
+    }
+
+    /**
+     * Resolve a relative URL from the manifest base URL.
+     *
+     * Example:
+     * - baseUrl: "https://cdn.example.com/v1"
+     * - relativePath: "bundle-macos-arm64.zip"
+     * - Result: "https://cdn.example.com/v1/bundle-macos-arm64.zip"
+     */
+    private fun resolveRelativeUrl(baseUrl: String, relativePath: String): String {
+        // Remove trailing slash from base if present
+        val base = baseUrl.trimEnd('/')
+        return "$base/$relativePath"
     }
 
     private suspend fun downloadIncremental(
@@ -372,8 +396,9 @@ class DownloadManager(
         zipPath: Path,
         manifest: BundleManifest
     ) = withContext(Dispatchers.IO) {
-        // Create a map of path -> expected hash for verification
-        val expectedHashes = manifest.files.associate { it.path to it.hash }
+        // Create a map of path -> expected hash for files applicable to this platform
+        val platformFiles = manifest.filesForPlatform(platform)
+        val expectedHashes = platformFiles.associate { it.path to it.hash }
 
         ZipInputStream(Files.newInputStream(zipPath)).use { zip ->
             var entry = zip.nextEntry

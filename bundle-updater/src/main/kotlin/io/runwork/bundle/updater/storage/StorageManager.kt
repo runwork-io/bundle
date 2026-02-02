@@ -1,6 +1,7 @@
 package io.runwork.bundle.updater.storage
 
 import io.runwork.bundle.common.Os
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
@@ -94,7 +95,7 @@ class StorageManager(
     /**
      * Prepare a version directory by linking files from CAS.
      *
-     * For each file in the manifest:
+     * For each file in the manifest that applies to the given platform:
      * 1. Look up the file in CAS by hash
      * 2. Create parent directories in the version directory
      * 3. Create a link from version/{path} to CAS/{hash}
@@ -108,9 +109,10 @@ class StorageManager(
      * If manifest.json exists and points to version N, that version is fully prepared.
      *
      * @param manifest The bundle manifest describing all files
+     * @param platform The target platform to filter files for
      * @throws IllegalStateException if a required file is missing from CAS or linking fails
      */
-    suspend fun prepareVersion(manifest: BundleManifest) {
+    suspend fun prepareVersion(manifest: BundleManifest, platform: Platform) {
         storageMutex.withLock {
             ensureDirectoriesExist()
             val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
@@ -119,7 +121,9 @@ class StorageManager(
                 Files.createDirectories(versionDir)
             }
 
-            for (file in manifest.files) {
+            // Only prepare files that apply to this platform
+            val platformFiles = manifest.filesForPlatform(platform)
+            for (file in platformFiles) {
                 val sourcePath = contentStore.getPath(file.hash)
                     ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
 
@@ -303,12 +307,13 @@ class StorageManager(
      * Verify all files in a version match their expected hashes.
      *
      * @param manifest The manifest to verify against
+     * @param platform The target platform to filter files for
      * @return List of files that failed verification (empty if all passed)
      */
-    suspend fun verifyVersion(manifest: BundleManifest): List<VerificationFailure> {
+    suspend fun verifyVersion(manifest: BundleManifest, platform: Platform): List<VerificationFailure> {
         val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
 
-        val filesToVerify = manifest.files.map { file ->
+        val filesToVerify = manifest.filesForPlatform(platform).map { file ->
             versionDir.resolve(file.path) to file.hash
         }
 

@@ -1,9 +1,9 @@
 package io.runwork.bundle.gradle
 
-import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.storage.PlatformPaths
-import io.runwork.bundle.common.verification.HashVerifier
+import io.runwork.bundle.common.manifest.PlatformBundle
+import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -12,6 +12,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
@@ -24,12 +25,21 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * Gradle task for creating signed bundles.
+ * Gradle task for creating signed multi-platform bundles.
  *
  * This task packages a directory into a signed bundle with:
- * - manifest.json: Signed manifest file
- * - bundle.zip: Full bundle archive for initial downloads
+ * - manifest.json: Signed manifest file with multi-platform support
+ * - bundle-{fingerprint}.zip: Per-platform bundle archives for initial downloads (deduplicated by content)
  * - files/: Individual files named by hash for incremental updates
+ *
+ * Target platforms must be explicitly specified via the `platforms` property.
+ *
+ * Platform-specific resources can be organized in the resources/ folder structure:
+ * - resources/common/ - Universal files (included for all platforms)
+ * - resources/macos/ - macOS only (both arm64 and x64)
+ * - resources/macos-arm64/ - macOS ARM64 only
+ * - resources/windows-x64/ - Windows x64 only
+ * - etc.
  *
  * Usage:
  * ```kotlin
@@ -40,21 +50,18 @@ import java.util.zip.ZipOutputStream
  *     outputDirectory.set(layout.buildDirectory.dir("bundle"))
  *     mainClass.set("com.myapp.MainKt")
  *     buildNumber.set(System.currentTimeMillis())  // Or use CI build number
+ *     platforms.set(listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64"))
  *
  *     // Preferred: use Gradle's environment variable provider
  *     privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
- *
- *     // Alternative: specify env var name (task reads it at execution time)
- *     // privateKeyEnvVar.set("BUNDLE_PRIVATE_KEY")
- *
- *     // Alternative: read from file
- *     // privateKeyFile.set(file("path/to/private.key"))
  *
  *     dependsOn("installDist")
  * }
  * ```
  */
 abstract class BundleCreatorTask : DefaultTask() {
+
+    private val manifestBuilder = BundleManifestBuilder()
 
     /**
      * Directory containing files to bundle.
@@ -63,18 +70,18 @@ abstract class BundleCreatorTask : DefaultTask() {
     abstract val inputDirectory: DirectoryProperty
 
     /**
-     * Output directory for manifest.json, bundle.zip, and files/.
+     * Output directory for manifest.json, bundle-{platform}.zip files, and files/.
      */
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
     /**
-     * Platform identifier (e.g., "macos-arm64", "windows-x86_64").
-     * Defaults to auto-detect from current system.
+     * List of target platforms (e.g., ["macos-arm64", "macos-x64", "windows-x64"]).
+     *
+     * Valid platform values are: macos-arm64, macos-x64, windows-arm64, windows-x64, linux-arm64, linux-x64
      */
     @get:Input
-    @get:Optional
-    abstract val platform: Property<String>
+    abstract val platforms: ListProperty<String>
 
     /**
      * Build number for the manifest.
@@ -160,11 +167,22 @@ abstract class BundleCreatorTask : DefaultTask() {
         // Get private key
         val privateKeyBase64 = resolvePrivateKey()
 
-        // Determine platform
-        val platformId = if (platform.isPresent) {
-            platform.get()
-        } else {
-            PlatformPaths.getPlatform().toString()
+        // Get and validate target platforms
+        val targetPlatforms = platforms.get()
+        if (targetPlatforms.isEmpty()) {
+            throw GradleException("The 'platforms' property must not be empty")
+        }
+
+        // Validate each platform
+        for (platformId in targetPlatforms) {
+            try {
+                Platform.fromString(platformId)
+            } catch (e: IllegalArgumentException) {
+                throw GradleException(
+                    "Invalid platform '$platformId'. Valid platforms are: " +
+                        "macos-arm64, macos-x64, windows-arm64, windows-x64, linux-arm64, linux-x64"
+                )
+            }
         }
 
         // Get build number (required)
@@ -187,55 +205,80 @@ abstract class BundleCreatorTask : DefaultTask() {
         // Load signer
         val signer = BundleManifestSigner.fromBase64(privateKeyBase64)
 
-        // Collect files
-        val files = collectFiles(inputDir)
+        // Collect files with platform constraints
+        val bundleFiles = runBlocking {
+            manifestBuilder.collectFilesWithPlatformConstraints(inputDir)
+        }
 
-        logger.lifecycle("Creating bundle:")
+        logger.lifecycle("Creating multi-platform bundle:")
         logger.lifecycle("  Input: ${inputDir.absolutePath}")
-        logger.lifecycle("  Platform: $platformId")
-        logger.lifecycle("  Files: ${files.size}")
+        logger.lifecycle("  Platforms: ${targetPlatforms.joinToString(", ")}")
+        logger.lifecycle("  Total files: ${bundleFiles.size}")
 
         // Create output directories
         outputDir.mkdirs()
         val filesDir = File(outputDir, "files")
         filesDir.mkdirs()
 
-        // Copy files and build manifest entries
-        val bundleFiles = runBlocking {
-            files.map { (relativePath, file) ->
-                val hash = HashVerifier.computeHash(file.toPath())
-                val hashFileName = hash.removePrefix("sha256:")
-                val destFile = File(filesDir, hashFileName)
+        // Copy all files to files/ directory (content-addressable)
+        for (bundleFile in bundleFiles) {
+            val sourceFile = File(inputDir, bundleFile.path)
+            val hashFileName = bundleFile.hash.removePrefix("sha256:")
+            val destFile = File(filesDir, hashFileName)
 
-                if (!destFile.exists()) {
-                    file.copyTo(destFile)
-                }
-
-                BundleFile(
-                    path = relativePath,
-                    hash = hash,
-                    size = file.length(),
-                )
+            if (!destFile.exists()) {
+                sourceFile.copyTo(destFile)
             }
         }
 
-        // Create bundle.zip
-        val bundleZip = File(outputDir, "bundle.zip")
-        createBundleZip(bundleZip, files)
-        val bundleHash = runBlocking { HashVerifier.computeHash(bundleZip.toPath()) }
+        // Group platforms by content fingerprint to deduplicate identical zips
+        val platformGroups = manifestBuilder.groupPlatformsByContent(bundleFiles, targetPlatforms)
+        val platformBundleZips = mutableMapOf<String, String>()
+
+        for ((fingerprint, platforms) in platformGroups) {
+            // Content-addressable zip filename
+            val zipFileName = "bundle-$fingerprint.zip"
+            val bundleZip = File(outputDir, zipFileName)
+
+            // Get files for this content (all platforms in group have same files)
+            val platform = Platform.fromString(platforms.first())
+            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
+
+            // Create the zip once
+            val files = platformFiles.map { bf ->
+                bf.path to File(inputDir, bf.path)
+            }
+            createBundleZip(bundleZip, files)
+
+            // Point all platforms in the group to this zip
+            for (platformId in platforms) {
+                platformBundleZips[platformId] = zipFileName
+            }
+
+            logger.lifecycle("  Created $zipFileName (${platformFiles.size} files) for: ${platforms.joinToString(", ")}")
+        }
+
+        // Build platform bundles map with total sizes
+        val platformBundlesMap = targetPlatforms.associateWith { platformId ->
+            val platform = Platform.fromString(platformId)
+            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
+            val totalSize = platformFiles.sumOf { it.size }
+            PlatformBundle(
+                bundleZip = platformBundleZips[platformId]!!,
+                totalSize = totalSize,
+            )
+        }
 
         // Create unsigned manifest
         val manifestWithoutSig = BundleManifest(
             schemaVersion = 1,
             buildNumber = build,
-            platform = platformId,
             createdAt = Instant.now().toString(),
-            minimumShellVersion = minShell,
+            minShellVersion = minShell,
             shellUpdateUrl = updateUrl,
             files = bundleFiles,
             mainClass = mainClass.get(),
-            totalSize = bundleFiles.sumOf { it.size },
-            bundleHash = bundleHash,
+            platformBundles = platformBundlesMap,
             signature = ""
         )
 
@@ -249,12 +292,17 @@ abstract class BundleCreatorTask : DefaultTask() {
         logger.lifecycle("")
         logger.lifecycle("Bundle created successfully!")
         logger.lifecycle("  Build number: $build")
-        logger.lifecycle("  Total size: ${signedManifest.totalSize / 1024 / 1024} MB")
         logger.lifecycle("  Output: ${outputDir.absolutePath}")
         logger.lifecycle("")
         logger.lifecycle("Files created:")
-        logger.lifecycle("  manifest.json - Signed manifest")
-        logger.lifecycle("  bundle.zip - Full bundle archive")
+        logger.lifecycle("  manifest.json - Signed multi-platform manifest")
+        // List unique zip files
+        val uniqueZips = platformBundleZips.entries.groupBy({ it.value }, { it.key })
+        for ((zipName, platformsForZip) in uniqueZips) {
+            val totalSize = platformBundlesMap[platformsForZip.first()]!!.totalSize
+            val sizeMb = totalSize / 1024 / 1024
+            logger.lifecycle("  $zipName - $sizeMb MB (${platformsForZip.joinToString(", ")})")
+        }
         logger.lifecycle("  files/ - Individual files by hash (for incremental updates)")
     }
 
@@ -278,17 +326,6 @@ abstract class BundleCreatorTask : DefaultTask() {
                 throw GradleException("One of privateKey, privateKeyEnvVar, or privateKeyFile must be set")
             }
         }
-    }
-
-    private fun collectFiles(inputDir: File): List<Pair<String, File>> {
-        return inputDir.walkTopDown()
-            .filter { it.isFile }
-            .map { file ->
-                val relativePath = file.relativeTo(inputDir).path
-                    .replace(File.separatorChar, '/') // Normalize to forward slashes
-                relativePath to file
-            }
-            .toList()
     }
 
     private fun createBundleZip(output: File, files: List<Pair<String, File>>) {

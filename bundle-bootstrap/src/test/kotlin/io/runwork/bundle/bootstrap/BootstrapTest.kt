@@ -5,6 +5,7 @@ import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
+import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
@@ -121,7 +122,7 @@ class BootstrapTest {
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
-            platform = "windows-x86_64" // Different from config platform
+            platform = "windows-x64" // Different from config platform
         )
 
         setupBundle(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
@@ -131,7 +132,7 @@ class BootstrapTest {
 
         assertIs<BundleValidationResult.Failed>(result)
         assertTrue(result.reason.contains("platform", ignoreCase = true))
-        assertTrue(result.reason.contains("mismatch", ignoreCase = true))
+        assertTrue(result.reason.contains("not supported", ignoreCase = true))
     }
 
     @Test
@@ -142,7 +143,7 @@ class BootstrapTest {
         val manifest = createSignedManifest(
             files = listOf(bundleFile),
             keyPair = keyPair,
-            minimumShellVersion = 10,
+            minShellVersion = 10,
             shellUpdateUrl = "https://example.com/update"
         )
 
@@ -397,20 +398,23 @@ class BootstrapTest {
         buildNumber: Long = 1,
         platform: String = "macos-arm64",
         mainClass: String = "io.runwork.TestMain",
-        minimumShellVersion: Int = 1,
+        minShellVersion: Int = 1,
         shellUpdateUrl: String? = null
     ): BundleManifest {
         val unsigned = BundleManifest(
             schemaVersion = 1,
             buildNumber = buildNumber,
-            platform = platform,
             createdAt = "2025-01-01T00:00:00Z",
-            minimumShellVersion = minimumShellVersion,
+            minShellVersion = minShellVersion,
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            totalSize = files.sumOf { it.size },
-            bundleHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            platformBundles = mapOf(
+                platform to PlatformBundle(
+                    bundleZip = "bundle-$platform.zip",
+                    totalSize = files.sumOf { it.size }
+                )
+            ),
             signature = ""
         )
 

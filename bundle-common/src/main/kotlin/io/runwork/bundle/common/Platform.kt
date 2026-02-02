@@ -1,11 +1,20 @@
 package io.runwork.bundle.common
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 /**
  * Supported operating systems.
  */
+@Serializable
 enum class Os(val id: String) {
+    @SerialName("macos")
     MACOS("macos"),
+
+    @SerialName("windows")
     WINDOWS("windows"),
+
+    @SerialName("linux")
     LINUX("linux");
 
     companion object {
@@ -35,10 +44,16 @@ enum class Os(val id: String) {
 
 /**
  * Supported CPU architectures.
+ *
+ * Uses Compose Desktop naming convention: arm64, x64
  */
-enum class Architecture(val id: String) {
+@Serializable
+enum class Arch(val id: String) {
+    @SerialName("arm64")
     ARM64("arm64"),
-    X86_64("x86_64");
+
+    @SerialName("x64")
+    X64("x64");
 
     companion object {
         /**
@@ -46,7 +61,7 @@ enum class Architecture(val id: String) {
          *
          * @throws IllegalArgumentException if the architecture is not recognized
          */
-        fun fromId(id: String): Architecture {
+        fun fromId(id: String): Arch {
             return entries.find { it.id == id }
                 ?: throw IllegalArgumentException("Unknown architecture: $id")
         }
@@ -54,11 +69,11 @@ enum class Architecture(val id: String) {
         /**
          * The current architecture, detected from system properties.
          */
-        val current: Architecture by lazy {
+        val current: Arch by lazy {
             val arch = System.getProperty("os.arch")
             when {
                 arch == "aarch64" || arch == "arm64" -> ARM64
-                arch.contains("64") || arch == "amd64" -> X86_64
+                arch.contains("64") || arch == "amd64" -> X64
                 else -> throw IllegalArgumentException("Unsupported architecture: $arch")
             }
         }
@@ -73,12 +88,12 @@ enum class Architecture(val id: String) {
  */
 data class Platform(
     val os: Os,
-    val architecture: Architecture,
+    val arch: Arch,
 ) {
     /**
      * Returns the platform identifier string (e.g., "macos-arm64").
      */
-    override fun toString(): String = "${os.id}-${architecture.id}"
+    override fun toString(): String = "${os.id}-${arch.id}"
 
     companion object {
         /**
@@ -91,7 +106,7 @@ data class Platform(
             require(parts.size == 2) { "Invalid platform format: $platform (expected 'os-arch')" }
             return Platform(
                 os = Os.fromId(parts[0]),
-                architecture = Architecture.fromId(parts[1]),
+                arch = Arch.fromId(parts[1]),
             )
         }
 
@@ -101,7 +116,7 @@ data class Platform(
         val current: Platform by lazy {
             Platform(
                 os = Os.current,
-                architecture = Architecture.current,
+                arch = Arch.current,
             )
         }
     }

@@ -1,5 +1,6 @@
 package io.runwork.bundle.creator
 
+import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.verification.SignatureVerifier
 import kotlin.test.Test
@@ -110,22 +111,25 @@ class BundleManifestSignerTest {
                 )
             ),
             buildNumber = 42,
-            platform = "macos-arm64",
+            platforms = listOf("macos-arm64"),
             mainClass = "io.runwork.Main"
         )
 
         val signedManifest = signer.signManifest(manifest)
 
+        val testPlatform = Platform.fromString("macos-arm64")
+
         // All fields should be preserved
         assertEquals(manifest.schemaVersion, signedManifest.schemaVersion)
         assertEquals(manifest.buildNumber, signedManifest.buildNumber)
-        assertEquals(manifest.platform, signedManifest.platform)
+        assertEquals(manifest.platformBundles.keys, signedManifest.platformBundles.keys)
+        assertTrue(signedManifest.supportsPlatform(testPlatform))
         assertEquals(manifest.createdAt, signedManifest.createdAt)
-        assertEquals(manifest.minimumShellVersion, signedManifest.minimumShellVersion)
+        assertEquals(manifest.minShellVersion, signedManifest.minShellVersion)
         assertEquals(manifest.files, signedManifest.files)
         assertEquals(manifest.mainClass, signedManifest.mainClass)
-        assertEquals(manifest.totalSize, signedManifest.totalSize)
-        assertEquals(manifest.bundleHash, signedManifest.bundleHash)
+        assertEquals(manifest.totalSizeForPlatform(testPlatform), signedManifest.totalSizeForPlatform(testPlatform))
+        assertEquals(manifest.bundleZipForPlatform(testPlatform), signedManifest.bundleZipForPlatform(testPlatform))
         // Only signature should be different
         assertNotEquals(manifest.signature, signedManifest.signature)
     }

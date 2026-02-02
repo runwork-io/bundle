@@ -1,7 +1,5 @@
 package samples
 
-import io.runwork.bundle.common.manifest.BundleFile
-import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.creator.BundlePackager
 import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
@@ -12,8 +10,20 @@ import java.io.File
 /**
  * Use Case 3: Bundle Creator (CI Job)
  *
- * Creates and signs bundles for distribution. This code runs
+ * Creates and signs multi-platform bundles for distribution. This code runs
  * in CI/CD pipelines, not in the shell or bundle.
+ *
+ * The input directory should have platform-specific files in resources/ subdirectories:
+ * ```
+ * inputDir/
+ * ├── lib/                   # Universal files (JARs, etc.)
+ * └── resources/
+ *     ├── common/            # Universal resources
+ *     ├── macos-arm64/       # macOS ARM64-specific
+ *     ├── macos-x64/         # macOS x64-specific
+ *     ├── windows-x64/       # Windows x64-specific
+ *     └── linux-x64/         # Linux x64-specific
+ * ```
  */
 suspend fun createBundle() {
     val inputDir = File("build/distributions/myapp")
@@ -27,49 +37,48 @@ suspend fun createBundle() {
     val builder = BundleManifestBuilder()
     val packager = BundlePackager()
 
-    // Step 1: Collect files and compute hashes
-    val collectedFiles = builder.collectFiles(inputDir)
-    println("Collected ${collectedFiles.size} files")
+    // Step 1: Specify target platforms explicitly
+    val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
+    println("Target platforms: $targetPlatforms")
 
-    val bundleFiles = collectedFiles.map { (relativePath, file) ->
-        BundleFile(
-            path = relativePath,
-            hash = HashVerifier.computeHash(file.toPath()),
-            size = file.length(),
-        )
+    // Step 2: Collect files with platform constraints and compute hashes
+    val bundleFiles = builder.collectFilesWithPlatformConstraints(inputDir)
+    println("Collected ${bundleFiles.size} files")
+
+    // Step 3: Package bundles (creates per-platform bundle-{platform}.zip and files/ directory)
+    // Returns a map of platform ID to bundle zip filename
+    val platformBundleZips = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
+    println("Bundles packaged:")
+    platformBundleZips.forEach { (platform, zipFile) ->
+        println("  $platform -> $zipFile")
     }
 
-    // Step 2: Package bundle (creates bundle.zip and files/ directory)
-    // Returns the SHA-256 hash of bundle.zip
-    val bundleHash = packager.packageBundle(inputDir, outputDir, bundleFiles)
-    println("Bundle packaged. Hash: $bundleHash")
-
-    // Step 3: Build unsigned manifest
-    // Note: We pass the same inputDir, but the manifest will use our pre-computed bundleHash
+    // Step 4: Build unsigned manifest
     val unsignedManifest = builder.build(
         inputDir = inputDir,
-        platform = "macos-arm64",
+        targetPlatforms = targetPlatforms,
         buildNumber = System.currentTimeMillis(), // Or from CI build number
         mainClass = "com.myapp.MainKt",
         minShellVersion = 1,
-        bundleHash = bundleHash,
+        platformBundleHashes = platformBundleZips,
         shellUpdateUrl = null, // Optional: URL to update the shell app itself
     )
 
-    // Step 4: Sign manifest with Ed25519
+    // Step 5: Sign manifest with Ed25519
     val signedManifest = signer.signManifest(unsignedManifest)
 
-    // Step 5: Write manifest.json to output directory
+    // Step 6: Write manifest.json to output directory
     val json = Json { prettyPrint = true }
     val manifestJson = json.encodeToString(signedManifest)
     File(outputDir, "manifest.json").writeText(manifestJson)
 
     println("Bundle created:")
     println("  Build: ${signedManifest.buildNumber}")
-    println("  Platform: ${signedManifest.platform}")
+    println("  Platforms: ${signedManifest.platformBundles.keys.joinToString(", ")}")
     println("  Files: ${signedManifest.files.size}")
-    println("  Total size: ${signedManifest.totalSize} bytes")
-    println("  Bundle hash: ${signedManifest.bundleHash}")
+    signedManifest.platformBundles.forEach { (platform, bundle) ->
+        println("  $platform: ${bundle.totalSize} bytes (${bundle.bundleZip})")
+    }
     println("  Output: $outputDir")
 }
 
@@ -87,17 +96,29 @@ fun generateKeys() {
  * Output Structure after running createBundle():
  *
  * build/bundle-output/
- * ├── manifest.json          # Signed manifest (JSON)
- * ├── bundle.zip             # Full bundle archive
+ * ├── manifest.json              # Signed manifest (JSON) - single manifest for all platforms
+ * ├── bundle-macos-arm64.zip     # macOS ARM64 bundle archive
+ * ├── bundle-macos-x64.zip       # macOS x64 bundle archive
+ * ├── bundle-windows-x64.zip     # Windows x64 bundle archive
+ * ├── bundle-linux-x64.zip       # Linux x64 bundle archive
  * └── files/
- *     ├── abc123...          # File contents by SHA-256 hash
+ *     ├── abc123...              # File contents by SHA-256 hash (all platforms)
  *     ├── def456...
  *     └── ...
  *
- * CLI Usage:
- *   # Generate keys (one-time)
- *   ./gradlew :bundle-creator:run --args="--generate-keys"
+ * The manifest.json contains platform-specific bundle information:
+ * - platformBundles: Map of platform ID to {bundleZip, totalSize}
+ * - files: List of all files with optional os/arch constraints
  *
- *   # Create bundle
- *   ./gradlew :bundle-creator:run --args="--input build/dist --output build/bundle --platform macos-arm64 --private-key-env BUNDLE_PRIVATE_KEY"
+ * Example manifest structure:
+ * {
+ *   "platformBundles": {
+ *     "macos-arm64": { "bundleZip": "bundle-macos-arm64.zip", "totalSize": 12345678 },
+ *     "windows-x64": { "bundleZip": "bundle-windows-x64.zip", "totalSize": 12345678 }
+ *   },
+ *   "files": [
+ *     { "path": "lib/app.jar", "hash": "sha256:...", "size": 1234 },
+ *     { "path": "resources/macos-arm64/native.dylib", "hash": "sha256:...", "size": 5678, "os": "macos", "arch": "arm64" }
+ *   ]
+ * }
  */
