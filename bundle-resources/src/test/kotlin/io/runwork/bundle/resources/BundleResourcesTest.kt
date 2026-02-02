@@ -48,21 +48,7 @@ class BundleResourcesTest {
     }
 
     private fun createResource(vararg pathParts: String, content: String = "test content"): Path {
-        val config = BundleResources.run {
-            if (isInitialized) {
-                BundleLaunchConfig(
-                    appDataDir = tempDir.toString(),
-                    bundleSubdirectory = "bundle",
-                    baseUrl = "https://example.com",
-                    publicKey = "test-public-key",
-                    platform = platform.toString(),
-                    shellVersion = 1,
-                    currentBuildNumber = 100L,
-                )
-            } else {
-                createConfig()
-            }
-        }
+        val config = createConfig()
 
         val bundleDir = if (config.bundleSubdirectory.isEmpty()) {
             tempDir
@@ -111,11 +97,6 @@ class BundleResourcesTest {
             assertFailsWith<IllegalStateException> {
                 BundleResources.versionDir
             }
-        }
-
-        @Test
-        fun `platform returns Platform current`() {
-            assertEquals(Platform.current, BundleResources.platform)
         }
 
         @Test

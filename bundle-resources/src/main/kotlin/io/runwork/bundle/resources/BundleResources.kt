@@ -68,12 +68,6 @@ object BundleResources {
         get() = _versionPath ?: throw IllegalStateException("BundleResources not initialized. Call init() first.")
 
     /**
-     * The current platform.
-     */
-    val platform: Platform
-        get() = Platform.current
-
-    /**
      * Resolve a resource path with platform priority.
      *
      * Searches in order:
@@ -86,9 +80,8 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolve(path: String): Path? {
-        val versionPath = versionDir
-        val platform = platform
-        val resourcesDir = versionPath.resolve("resources")
+        val resourcesDir = versionDir.resolve("resources")
+        val platform = Platform.current
 
         val searchLocations = listOf(
             resourcesDir.resolve(platform.toString()).resolve(path),
@@ -108,9 +101,8 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveOrThrow(path: String): Path {
-        val versionPath = versionDir
-        val platform = platform
-        val resourcesDir = versionPath.resolve("resources")
+        val resourcesDir = versionDir.resolve("resources")
+        val platform = Platform.current
 
         val searchLocations = listOf(
             resourcesDir.resolve(platform.toString()).resolve(path),
@@ -135,7 +127,7 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveNativeLibrary(name: String): Path? {
-        val filename = nativeLibraryFilename(name, platform.os)
+        val filename = nativeLibraryFilename(name, Platform.current.os)
         return resolve(filename)
     }
 
@@ -150,7 +142,7 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun loadNativeLibrary(name: String) {
-        val filename = nativeLibraryFilename(name, platform.os)
+        val filename = nativeLibraryFilename(name, Platform.current.os)
         val path = resolveOrThrow(filename)
         System.load(path.toAbsolutePath().toString())
     }
