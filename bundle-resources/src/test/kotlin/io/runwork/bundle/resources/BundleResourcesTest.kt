@@ -1,6 +1,7 @@
 package io.runwork.bundle.resources
 
 import io.runwork.bundle.common.BundleLaunchConfig
+import io.runwork.bundle.common.Platform
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -88,7 +89,6 @@ class BundleResourcesTest {
             BundleResources.init(config)
 
             assertTrue(BundleResources.isInitialized)
-            assertEquals("macos-arm64", BundleResources.platform.toString())
         }
 
         @Test
@@ -114,10 +114,8 @@ class BundleResourcesTest {
         }
 
         @Test
-        fun `platform throws if not initialized`() {
-            assertFailsWith<IllegalStateException> {
-                BundleResources.platform
-            }
+        fun `platform returns Platform current`() {
+            assertEquals(Platform.current, BundleResources.platform)
         }
 
         @Test
@@ -140,24 +138,27 @@ class BundleResourcesTest {
 
         @Test
         fun `reset allows re-initialization`() {
-            val config1 = createConfig(platform = "macos-arm64")
+            val config1 = createConfig(buildNumber = 100L)
             BundleResources.init(config1)
-            assertEquals("macos-arm64", BundleResources.platform.toString())
+            assertTrue(BundleResources.isInitialized)
 
             BundleResources.reset()
             assertFalse(BundleResources.isInitialized)
 
-            val config2 = createConfig(platform = "linux-x64")
+            val config2 = createConfig(buildNumber = 200L)
             BundleResources.init(config2)
-            assertEquals("linux-x64", BundleResources.platform.toString())
+            assertTrue(BundleResources.isInitialized)
+            assertTrue(BundleResources.versionDir.toString().contains("200"))
         }
     }
 
     @Nested
     inner class Resolution {
+        private val currentPlatform = Platform.current
+
         @BeforeEach
         fun initResources() {
-            BundleResources.init(createConfig(platform = "macos-arm64"))
+            BundleResources.init(createConfig())
         }
 
         @Test
@@ -168,7 +169,7 @@ class BundleResourcesTest {
 
         @Test
         fun `resolve finds platform-specific resource`() {
-            val platformPath = createResource("macos-arm64", "config.json")
+            val platformPath = createResource(currentPlatform.toString(), "config.json")
 
             val result = BundleResources.resolve("config.json")
             assertNotNull(result)
@@ -177,7 +178,7 @@ class BundleResourcesTest {
 
         @Test
         fun `resolve finds os-only resource`() {
-            val osPath = createResource("macos", "config.json")
+            val osPath = createResource(currentPlatform.os.id, "config.json")
 
             val result = BundleResources.resolve("config.json")
             assertNotNull(result)
@@ -195,8 +196,8 @@ class BundleResourcesTest {
 
         @Test
         fun `resolve prefers platform-specific over os-only`() {
-            val platformPath = createResource("macos-arm64", "config.json", content = "platform")
-            createResource("macos", "config.json", content = "os")
+            val platformPath = createResource(currentPlatform.toString(), "config.json", content = "platform")
+            createResource(currentPlatform.os.id, "config.json", content = "os")
             createResource("common", "config.json", content = "common")
 
             val result = BundleResources.resolve("config.json")
@@ -206,7 +207,7 @@ class BundleResourcesTest {
 
         @Test
         fun `resolve prefers os-only over common`() {
-            val osPath = createResource("macos", "config.json", content = "os")
+            val osPath = createResource(currentPlatform.os.id, "config.json", content = "os")
             createResource("common", "config.json", content = "common")
 
             val result = BundleResources.resolve("config.json")
@@ -239,8 +240,8 @@ class BundleResourcesTest {
 
             assertEquals("nonexistent.txt", exception.path)
             assertEquals(3, exception.searchedLocations.size)
-            assertTrue(exception.searchedLocations[0].toString().contains("macos-arm64"))
-            assertTrue(exception.searchedLocations[1].toString().contains("macos"))
+            assertTrue(exception.searchedLocations[0].toString().contains(currentPlatform.toString()))
+            assertTrue(exception.searchedLocations[1].toString().contains(currentPlatform.os.id))
             assertTrue(exception.searchedLocations[2].toString().contains("common"))
         }
 
@@ -265,43 +266,21 @@ class BundleResourcesTest {
 
     @Nested
     inner class NativeLibrary {
-        @Test
-        fun `resolveNativeLibrary uses dylib extension on macOS`() {
-            BundleResources.init(createConfig(platform = "macos-arm64"))
-            val libPath = createResource("macos-arm64", "libwhisper.dylib")
+        private val currentPlatform = Platform.current
 
-            val result = BundleResources.resolveNativeLibrary("whisper")
-            assertNotNull(result)
-            assertEquals(libPath, result)
+        private fun nativeLibraryFilename(name: String): String {
+            return when (currentPlatform.os) {
+                io.runwork.bundle.common.Os.MACOS -> "lib$name.dylib"
+                io.runwork.bundle.common.Os.WINDOWS -> "$name.dll"
+                io.runwork.bundle.common.Os.LINUX -> "lib$name.so"
+            }
         }
 
         @Test
-        fun `resolveNativeLibrary uses dll extension on Windows`() {
-            BundleResources.init(createConfig(platform = "windows-x64"))
-
-            // Create the file in the right location for windows platform
-            val bundleDir = tempDir.resolve("bundle")
-            val versionDir = bundleDir.resolve("versions/100")
-            val resourcesDir = versionDir.resolve("resources")
-            val libPath = resourcesDir.resolve("windows-x64/whisper.dll")
-            libPath.parent.createDirectories()
-            libPath.writeText("dll content")
-
-            val result = BundleResources.resolveNativeLibrary("whisper")
-            assertNotNull(result)
-            assertEquals(libPath, result)
-        }
-
-        @Test
-        fun `resolveNativeLibrary uses so extension on Linux`() {
-            BundleResources.init(createConfig(platform = "linux-x64"))
-
-            val bundleDir = tempDir.resolve("bundle")
-            val versionDir = bundleDir.resolve("versions/100")
-            val resourcesDir = versionDir.resolve("resources")
-            val libPath = resourcesDir.resolve("linux-x64/libwhisper.so")
-            libPath.parent.createDirectories()
-            libPath.writeText("so content")
+        fun `resolveNativeLibrary finds library with platform-specific naming`() {
+            BundleResources.init(createConfig())
+            val libFilename = nativeLibraryFilename("whisper")
+            val libPath = createResource(currentPlatform.toString(), libFilename)
 
             val result = BundleResources.resolveNativeLibrary("whisper")
             assertNotNull(result)
@@ -310,7 +289,7 @@ class BundleResourcesTest {
 
         @Test
         fun `resolveNativeLibrary returns null when not found`() {
-            BundleResources.init(createConfig(platform = "macos-arm64"))
+            BundleResources.init(createConfig())
 
             val result = BundleResources.resolveNativeLibrary("nonexistent")
             assertNull(result)
@@ -318,18 +297,20 @@ class BundleResourcesTest {
 
         @Test
         fun `resolveNativeLibrary uses platform priority`() {
-            BundleResources.init(createConfig(platform = "macos-arm64"))
+            BundleResources.init(createConfig())
+
+            val libFilename = nativeLibraryFilename("whisper")
 
             // Create lib in common
             val bundleDir = tempDir.resolve("bundle")
             val versionDir = bundleDir.resolve("versions/100")
             val resourcesDir = versionDir.resolve("resources")
-            val commonPath = resourcesDir.resolve("common/libwhisper.dylib")
+            val commonPath = resourcesDir.resolve("common/$libFilename")
             commonPath.parent.createDirectories()
             commonPath.writeText("common lib")
 
             // Create lib in platform-specific
-            val platformPath = resourcesDir.resolve("macos-arm64/libwhisper.dylib")
+            val platformPath = resourcesDir.resolve("${currentPlatform}/$libFilename")
             platformPath.parent.createDirectories()
             platformPath.writeText("platform lib")
 
@@ -346,36 +327,4 @@ class BundleResourcesTest {
         }
     }
 
-    @Nested
-    inner class PlatformVariations {
-        @Test
-        fun `works with macos-x64 platform`() {
-            BundleResources.init(createConfig(platform = "macos-x64"))
-            assertEquals("macos-x64", BundleResources.platform.toString())
-
-            val bundleDir = tempDir.resolve("bundle")
-            val versionDir = bundleDir.resolve("versions/100")
-            val resourcesDir = versionDir.resolve("resources")
-
-            // Create platform-specific resource
-            val platformPath = resourcesDir.resolve("macos-x64/config.json")
-            platformPath.parent.createDirectories()
-            platformPath.writeText("content")
-
-            val result = BundleResources.resolve("config.json")
-            assertEquals(platformPath, result)
-        }
-
-        @Test
-        fun `works with windows-x64 platform`() {
-            BundleResources.init(createConfig(platform = "windows-x64"))
-            assertEquals("windows-x64", BundleResources.platform.toString())
-        }
-
-        @Test
-        fun `works with linux-arm64 platform`() {
-            BundleResources.init(createConfig(platform = "linux-arm64"))
-            assertEquals("linux-arm64", BundleResources.platform.toString())
-        }
-    }
 }

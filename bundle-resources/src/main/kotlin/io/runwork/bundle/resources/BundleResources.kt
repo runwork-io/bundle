@@ -33,8 +33,8 @@ import kotlin.io.path.exists
  * ```
  */
 object BundleResources {
+    @Volatile
     private var _versionPath: Path? = null
-    private var _platform: Platform? = null
 
     /**
      * Initialize the resource resolver from BundleLaunchConfig.
@@ -46,16 +46,12 @@ object BundleResources {
     fun init(config: BundleLaunchConfig) {
         check(_versionPath == null) { "BundleResources already initialized. Call reset() first if re-initialization is needed." }
 
-        val platform = Platform.fromString(config.platform)
         val bundleDir = if (config.bundleSubdirectory.isEmpty()) {
             Path(config.appDataDir)
         } else {
             Path(config.appDataDir).resolve(config.bundleSubdirectory)
         }
-        val versionPath = bundleDir.resolve("versions").resolve(config.currentBuildNumber.toString())
-
-        _platform = platform
-        _versionPath = versionPath
+        _versionPath = bundleDir.resolve("versions").resolve(config.currentBuildNumber.toString())
     }
 
     /**
@@ -73,10 +69,9 @@ object BundleResources {
 
     /**
      * The current platform.
-     * @throws IllegalStateException if not initialized
      */
     val platform: Platform
-        get() = _platform ?: throw IllegalStateException("BundleResources not initialized. Call init() first.")
+        get() = Platform.current
 
     /**
      * Resolve a resource path with platform priority.
@@ -165,7 +160,6 @@ object BundleResources {
      */
     internal fun reset() {
         _versionPath = null
-        _platform = null
     }
 
     private fun nativeLibraryFilename(name: String, os: Os): String {
