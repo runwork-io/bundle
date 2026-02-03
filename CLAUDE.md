@@ -162,7 +162,7 @@ bundle/
 ### bundle-updater
 | Class | Purpose |
 |-------|---------|
-| `BundleUpdater` | Main API - downloadLatest() for shell, start() for background updates |
+| `BundleUpdater` | Main API - downloadLatest() for shell, runInBackground() for background updates |
 | `StorageManager` | Version lifecycle - prepareVersion(), getCurrentBuildNumber() |
 | `DownloadManager` | HTTP downloads - downloadBundle(), fetchManifest() |
 | `UpdateDecider` | Strategy selection - FullBundle, Incremental, or NoDownloadNeeded |
@@ -229,7 +229,7 @@ Version completeness is guaranteed by `manifest.json`: it is only saved after `p
 
 ### Error Handling
 - Retry logic with exponential backoff for network failures
-- Sealed classes for result types (`UpdateCheckResult`, `BundleValidationResult`, etc.)
+- Sealed classes for result types (`DownloadResult`, `BundleValidationResult`, etc.)
 - Signature failures are retried (could be CDN corruption)
 
 ### Platform Conventions
