@@ -114,32 +114,40 @@ class StorageManager(
      */
     suspend fun prepareVersion(manifest: BundleManifest, platform: Platform) {
         storageMutex.withLock {
-            ensureDirectoriesExist()
-            val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
+            prepareVersionUnlocked(manifest, platform)
+        }
+    }
+
+    /**
+     * Prepare a version directory without acquiring the lock.
+     * Caller must hold the storage lock via [withStorageLock].
+     */
+    internal suspend fun prepareVersionUnlocked(manifest: BundleManifest, platform: Platform) {
+        ensureDirectoriesExist()
+        val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
+
+        withContext(Dispatchers.IO) {
+            Files.createDirectories(versionDir)
+        }
+
+        // Only prepare files that apply to this platform
+        val platformFiles = manifest.filesForPlatform(platform)
+        for (file in platformFiles) {
+            val sourcePath = contentStore.getPath(file.hash)
+                ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
+
+            val destPath = versionDir.resolve(file.path)
+
+            // Skip if file already exists AND is a valid link to the CAS file
+            val needsLink = withContext(Dispatchers.IO) {
+                !Files.exists(destPath) || !isSameFile(destPath, sourcePath)
+            }
+            if (!needsLink) continue
 
             withContext(Dispatchers.IO) {
-                Files.createDirectories(versionDir)
-            }
-
-            // Only prepare files that apply to this platform
-            val platformFiles = manifest.filesForPlatform(platform)
-            for (file in platformFiles) {
-                val sourcePath = contentStore.getPath(file.hash)
-                    ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
-
-                val destPath = versionDir.resolve(file.path)
-
-                // Skip if file already exists AND is a valid link to the CAS file
-                val needsLink = withContext(Dispatchers.IO) {
-                    !Files.exists(destPath) || !isSameFile(destPath, sourcePath)
-                }
-                if (!needsLink) continue
-
-                withContext(Dispatchers.IO) {
-                    Files.createDirectories(destPath.parent)
-                    Files.deleteIfExists(destPath)
-                    createLink(destPath, sourcePath)
-                }
+                Files.createDirectories(destPath.parent)
+                Files.deleteIfExists(destPath)
+                createLink(destPath, sourcePath)
             }
         }
     }
@@ -193,10 +201,18 @@ class StorageManager(
      */
     suspend fun saveManifest(manifestJson: String) {
         storageMutex.withLock {
-            withContext(Dispatchers.IO) {
-                Files.createDirectories(bundleDir)
-                Files.writeString(manifestPath, manifestJson)
-            }
+            saveManifestUnlocked(manifestJson)
+        }
+    }
+
+    /**
+     * Save the current manifest to disk without acquiring the lock.
+     * Caller must hold the storage lock via [withStorageLock].
+     */
+    internal suspend fun saveManifestUnlocked(manifestJson: String) {
+        withContext(Dispatchers.IO) {
+            Files.createDirectories(bundleDir)
+            Files.writeString(manifestPath, manifestJson)
         }
     }
 

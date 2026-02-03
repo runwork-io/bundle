@@ -1,6 +1,7 @@
 package io.runwork.bundle.updater
 
 import io.runwork.bundle.updater.download.DownloadProgress
+import java.time.Instant
 
 /**
  * Current state of the BundleUpdater when running as a background service.
@@ -14,6 +15,9 @@ sealed class BundleUpdaterState {
 
     /** BundleUpdater is downloading an update */
     data class Downloading(val progress: DownloadProgress) : BundleUpdaterState()
+
+    /** BundleUpdater is waiting to retry after a transient error */
+    data class BackingOff(val retryNumber: Int, val nextRetryTime: Instant) : BundleUpdaterState()
 
     /** An update has been downloaded and is ready to apply */
     data class Ready(val newBuildNumber: Long) : BundleUpdaterState()

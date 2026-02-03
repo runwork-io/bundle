@@ -6,7 +6,8 @@ import io.runwork.bundle.bootstrap.BundleValidationResult
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdaterConfig
-import io.runwork.bundle.updater.result.DownloadResult
+import io.runwork.bundle.updater.BundleUpdateEvent
+import kotlinx.coroutines.flow.collect
 import java.nio.file.Path
 
 /**
@@ -45,30 +46,47 @@ suspend fun shellFirstRun() {
                 platform = bootstrapConfig.platform,
             )
             val updater = BundleUpdater(updaterConfig)
+            var downloadedBuildNumber: Long? = null
 
-            when (val downloadResult = updater.downloadLatest { progress ->
-                println("Downloading: ${progress.bytesDownloaded}/${progress.totalBytes} (${progress.percentCompleteInt}%)")
-            }) {
-                is DownloadResult.Success -> {
-                    println("Downloaded build ${downloadResult.buildNumber}")
-
-                    // Step 3: Validate and launch
-                    when (val validResult = bootstrap.validate()) {
-                        is BundleValidationResult.Valid -> {
-                            val loadedBundle = bootstrap.launch(validResult)
-                            println("Bundle launched: ${loadedBundle.manifest.buildNumber}")
-                        }
-                        else -> println("Validation failed after download: $validResult")
+            // Collect download events from the Flow
+            updater.downloadLatest().collect { event ->
+                when (event) {
+                    BundleUpdateEvent.Checking -> {
+                        println("Checking for updates...")
+                    }
+                    BundleUpdateEvent.UpToDate -> {
+                        println("Already up to date")
+                    }
+                    is BundleUpdateEvent.UpdateAvailable -> {
+                        println("Update available: build ${event.info.newBuildNumber}")
+                    }
+                    is BundleUpdateEvent.Downloading -> {
+                        println("Downloading: ${event.progress.bytesDownloaded}/${event.progress.totalBytes} (${event.progress.percentCompleteInt}%)")
+                    }
+                    is BundleUpdateEvent.BackingOff -> {
+                        println("Retry #${event.retryNumber} in ${event.delaySeconds}s: ${event.error.message}")
+                    }
+                    is BundleUpdateEvent.UpdateReady -> {
+                        println("Downloaded build ${event.newBuildNumber}")
+                        downloadedBuildNumber = event.newBuildNumber
+                    }
+                    is BundleUpdateEvent.Error -> {
+                        println("Download failed: ${event.error.message}")
+                    }
+                    is BundleUpdateEvent.CleanupComplete -> {
+                        // Cleanup happens after up-to-date check
                     }
                 }
-                is DownloadResult.Failure -> {
-                    println("Download failed: ${downloadResult.error}")
-                }
-                is DownloadResult.AlreadyUpToDate -> {
-                    println("Already up to date")
-                }
-                is DownloadResult.Cancelled -> {
-                    println("Download cancelled")
+            }
+
+            // Step 3: Validate and launch if download succeeded
+            if (downloadedBuildNumber != null) {
+                when (val validResult = bootstrap.validate()) {
+                    is BundleValidationResult.Valid -> {
+                        val loadedBundle = bootstrap.launch(validResult)
+                        println("Bundle launched: ${loadedBundle.manifest.buildNumber}")
+                    }
+                    else -> println("Validation failed after download: $validResult")
                 }
             }
             updater.close() // Clean up OkHttp client

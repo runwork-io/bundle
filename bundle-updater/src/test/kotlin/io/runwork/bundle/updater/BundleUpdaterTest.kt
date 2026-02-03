@@ -5,7 +5,10 @@ import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.updater.result.DownloadResult
 import io.runwork.bundle.updater.result.UpdateCheckResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
@@ -13,15 +16,20 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class BundleUpdaterTest {
 
@@ -209,9 +217,13 @@ class BundleUpdaterTest {
         )
 
         val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.downloadLatest()
+        val events = withContext(Dispatchers.IO) {
+            updater.downloadLatest().toList()
+        }
 
-        assertIs<DownloadResult.AlreadyUpToDate>(result)
+        // Should emit UpToDate (downgrade prevented)
+        val upToDateEvents = events.filterIsInstance<BundleUpdateEvent.UpToDate>()
+        assertTrue(upToDateEvents.isNotEmpty(), "Expected UpToDate event for downgrade prevention")
 
         updater.close()
     }
@@ -233,10 +245,15 @@ class BundleUpdaterTest {
         )
 
         val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.downloadLatest()
+        val events = withContext(Dispatchers.IO) {
+            updater.downloadLatest().toList()
+        }
 
-        assertIs<DownloadResult.Failure>(result)
-        assertTrue(result.error.contains("signature", ignoreCase = true))
+        // Should emit Error for signature failure
+        val errorEvents = events.filterIsInstance<BundleUpdateEvent.Error>()
+        assertTrue(errorEvents.isNotEmpty(), "Expected Error event for signature failure")
+        assertTrue(errorEvents[0].error.message.contains("signature", ignoreCase = true))
+        assertFalse(errorEvents[0].error.isRecoverable, "Signature failure should not be recoverable")
 
         updater.close()
     }
@@ -352,16 +369,26 @@ class BundleUpdaterTest {
 
     // ========== Helper methods ==========
 
+    private val fixedClock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneId.of("UTC"))
+
     private fun createUpdater(currentBuildNumber: Long): BundleUpdater {
+        val retryConfig = RetryConfig(
+            initialDelay = 1.seconds,
+            maxDelay = 60.seconds,
+            multiplier = 2.0,
+            maxAttempts = 0, // No retries in basic tests
+        )
         val config = BundleUpdaterConfig(
             appDataDir = appDataDir,
             bundleSubdirectory = "",
             baseUrl = mockServer.url("/").toString().trimEnd('/'),
             publicKey = keyPair.publicKeyBase64,
             currentBuildNumber = currentBuildNumber,
-            platform = Platform.fromString("macos-arm64")
+            platform = Platform.fromString("macos-arm64"),
+            retryConfig = retryConfig,
         )
-        return BundleUpdater(config)
+        // Use no-op delay function for fast tests
+        return BundleUpdater(config, fixedClock, delayFunction = { /* no-op */ })
     }
 
     private fun setupExistingBundle(

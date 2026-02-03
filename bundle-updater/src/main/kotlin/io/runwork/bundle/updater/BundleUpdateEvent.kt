@@ -2,6 +2,7 @@ package io.runwork.bundle.updater
 
 import io.runwork.bundle.updater.download.DownloadProgress
 import io.runwork.bundle.updater.result.CleanupResult
+import java.time.Instant
 
 /**
  * Events emitted by the [BundleUpdater] when running as a background service.
@@ -21,6 +22,21 @@ sealed class BundleUpdateEvent {
 
     /** An error occurred (may be recoverable) */
     data class Error(val error: UpdateError) : BundleUpdateEvent()
+
+    /** Retry is scheduled after a transient error */
+    data class BackingOff(
+        /** Which retry attempt this is (1 = first retry) */
+        val retryNumber: Int,
+
+        /** How long to wait before the next retry, in seconds */
+        val delaySeconds: Long,
+
+        /** When the next retry will occur */
+        val nextRetryTime: Instant,
+
+        /** The error that triggered this retry */
+        val error: UpdateError,
+    ) : BundleUpdateEvent()
 
     /** Cleanup cycle completed */
     data class CleanupComplete(val result: CleanupResult) : BundleUpdateEvent()

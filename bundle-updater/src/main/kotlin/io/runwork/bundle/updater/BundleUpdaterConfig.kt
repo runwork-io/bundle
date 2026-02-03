@@ -5,6 +5,24 @@ import io.runwork.bundle.common.storage.PlatformPaths
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * Configuration for retry behavior with exponential backoff.
+ */
+data class RetryConfig(
+    /** Initial delay before the first retry */
+    val initialDelay: Duration = 1.seconds,
+
+    /** Maximum delay between retries (caps exponential growth) */
+    val maxDelay: Duration = 60.seconds,
+
+    /** Multiplier applied to delay after each retry */
+    val multiplier: Double = 2.0,
+
+    /** Maximum number of retry attempts (not including the initial attempt) */
+    val maxAttempts: Int = 3,
+)
 
 /**
  * Configuration for the BundleUpdater.
@@ -33,6 +51,9 @@ data class BundleUpdaterConfig(
 
     /** Interval between automatic update checks when running as a background service */
     val checkInterval: Duration = 6.hours,
+
+    /** Configuration for retry behavior with exponential backoff */
+    val retryConfig: RetryConfig = RetryConfig(),
 ) {
     /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
     val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
@@ -52,6 +73,7 @@ data class BundleUpdaterConfig(
      * @param bundleSubdirectory Subdirectory within appDataDir for bundle files (default: "bundle"). Empty string stores files directly in appDataDir.
      * @param platform Platform (defaults to current platform)
      * @param checkInterval Interval between automatic update checks
+     * @param retryConfig Configuration for retry behavior with exponential backoff
      */
     constructor(
         appId: String,
@@ -61,6 +83,7 @@ data class BundleUpdaterConfig(
         bundleSubdirectory: String = "bundle",
         platform: Platform = Platform.current,
         checkInterval: Duration = 6.hours,
+        retryConfig: RetryConfig = RetryConfig(),
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
         bundleSubdirectory = bundleSubdirectory,
@@ -69,5 +92,6 @@ data class BundleUpdaterConfig(
         currentBuildNumber = currentBuildNumber,
         platform = platform,
         checkInterval = checkInterval,
+        retryConfig = retryConfig,
     )
 }

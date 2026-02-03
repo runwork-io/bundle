@@ -22,6 +22,9 @@ import okhttp3.mockwebserver.MockWebServer
 import okio.Buffer
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.junit.jupiter.api.Timeout
@@ -564,6 +567,12 @@ class IntegrationTest {
                 .setHeader("Content-Type", "application/json")
         )
 
+        val retryConfig = RetryConfig(
+            initialDelay = 1.seconds,
+            maxDelay = 60.seconds,
+            multiplier = 2.0,
+            maxAttempts = 0, // No retries for this test
+        )
         val updaterConfig = BundleUpdaterConfig(
             appDataDir = appDataDir,
             bundleSubdirectory = "",
@@ -571,14 +580,17 @@ class IntegrationTest {
             publicKey = keyPair.publicKeyBase64,
             currentBuildNumber = 200, // Currently at version 200
             platform = Platform.fromString("macos-arm64"),
+            retryConfig = retryConfig,
         )
-        val updater = BundleUpdater(updaterConfig)
+        val fixedClock = Clock.fixed(Instant.parse("2025-01-01T00:00:00Z"), ZoneId.of("UTC"))
+        val updater = BundleUpdater(updaterConfig, fixedClock, delayFunction = { /* no-op */ })
 
         // Attempt to download - should be prevented
-        val downloadResult = updater.downloadLatest()
+        val events = updater.downloadLatest().toList()
 
-        // Should return AlreadyUpToDate (downgrade prevented)
-        assertIs<DownloadResult.AlreadyUpToDate>(downloadResult)
+        // Should emit UpToDate (downgrade prevented)
+        val upToDateEvents = events.filterIsInstance<BundleUpdateEvent.UpToDate>()
+        assertTrue(upToDateEvents.isNotEmpty(), "Expected UpToDate event for downgrade prevention")
 
         // Verify version 100 was NOT created
         assertTrue(!Files.exists(appDataDir.resolve("versions/100")))

@@ -66,6 +66,9 @@ suspend fun startUpdateChecker(launchConfig: BundleLaunchConfig) {
             is BundleUpdateEvent.Downloading -> {
                 println("Downloading: ${event.progress.percentCompleteInt}%")
             }
+            is BundleUpdateEvent.BackingOff -> {
+                println("Retry #${event.retryNumber} in ${event.delaySeconds}s: ${event.error.message}")
+            }
             is BundleUpdateEvent.UpdateReady -> {
                 println("Update ready! Build ${event.newBuildNumber}")
                 // Prompt user to restart, or auto-restart
