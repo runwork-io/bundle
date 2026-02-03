@@ -159,9 +159,7 @@ class DownloadManager(
         manifest: BundleManifest,
         progressCallback: suspend (DownloadProgress) -> Unit
     ): DownloadResult = withContext(Dispatchers.IO) {
-        val strategy = UpdateDecider.decide(manifest, platform, contentStore)
-
-        when (strategy) {
+        when (val strategy = UpdateDecider.decide(manifest, platform, contentStore)) {
             is DownloadStrategy.NoDownloadNeeded -> {
                 DownloadResult.Success(manifest.buildNumber)
             }
