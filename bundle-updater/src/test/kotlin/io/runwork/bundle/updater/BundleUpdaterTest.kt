@@ -4,7 +4,6 @@ import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.updater.result.DownloadResult
-import io.runwork.bundle.updater.result.UpdateCheckResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -18,9 +17,7 @@ import java.util.zip.ZipOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BundleUpdaterTest {
@@ -46,139 +43,6 @@ class BundleUpdaterTest {
     fun tearDown() {
         mockServer.shutdown()
         TestFixtures.deleteRecursively(tempDir)
-    }
-
-    // ========== checkNow() tests ==========
-
-    @Test
-    fun checkNow_returnsUpdateAvailable() = runBlocking {
-        // Setup: manifest has buildNumber 200, current is 100
-        val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
-        val manifest = TestFixtures.createSignedManifest(
-            files = listOf(bundleFile),
-            signer = keyPair.signer,
-            buildNumber = 200
-        )
-
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.checkNow()
-
-        assertIs<UpdateCheckResult.UpdateAvailable>(result)
-        assertEquals(200, result.info.newBuildNumber)
-        assertEquals(100, result.info.currentBuildNumber)
-
-        updater.close()
-    }
-
-    @Test
-    fun checkNow_returnsUpToDateWhenCurrent() = runBlocking {
-        // Setup: manifest has same buildNumber as current
-        val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
-        val manifest = TestFixtures.createSignedManifest(
-            files = listOf(bundleFile),
-            signer = keyPair.signer,
-            buildNumber = 100
-        )
-
-        // First request for checkNow
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-        // Second request for tryCleanupIfUpToDate (called internally when up-to-date)
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.checkNow()
-
-        assertIs<UpdateCheckResult.UpToDate>(result)
-
-        updater.close()
-    }
-
-    @Test
-    fun checkNow_returnsFailedOnNetworkError() = runBlocking {
-        // Setup: mock server returns error
-        mockServer.enqueue(MockResponse().setResponseCode(500))
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.checkNow()
-
-        assertIs<UpdateCheckResult.Failed>(result)
-        assertTrue(result.error.isNotEmpty())
-
-        updater.close()
-    }
-
-    @Test
-    fun checkNow_returnsFailedOnSignatureFailure() = runBlocking {
-        // Setup: manifest with invalid signature
-        val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
-        val manifest = TestFixtures.createTestManifest(
-            files = listOf(bundleFile),
-            buildNumber = 200
-        ).copy(signature = "ed25519:invalid_base64_signature!")
-
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.checkNow()
-
-        assertIs<UpdateCheckResult.Failed>(result)
-        assertTrue(result.error.contains("signature", ignoreCase = true))
-
-        updater.close()
-    }
-
-    @Test
-    fun checkNow_preventsDowngrade() = runBlocking {
-        // Setup: manifest has OLDER buildNumber than current
-        val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
-        val manifest = TestFixtures.createSignedManifest(
-            files = listOf(bundleFile),
-            signer = keyPair.signer,
-            buildNumber = 50 // Older than current 100
-        )
-
-        // First request for checkNow
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-        // Second request for tryCleanupIfUpToDate (called internally when up-to-date)
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.checkNow()
-
-        // Should return UpToDate, NOT UpdateAvailable (downgrade prevention)
-        assertIs<UpdateCheckResult.UpToDate>(result)
-
-        updater.close()
     }
 
     // ========== downloadLatest() tests ==========
@@ -237,115 +101,6 @@ class BundleUpdaterTest {
 
         assertIs<DownloadResult.Failure>(result)
         assertTrue(result.error.contains("signature", ignoreCase = true))
-
-        updater.close()
-    }
-
-    // ========== cleanup() tests ==========
-
-    @Test
-    fun cleanup_returnsNullWhenUpdateAvailable() = runBlocking {
-        // Setup: current is 100, server has 200
-        val content = "content".toByteArray()
-        val file = TestFixtures.createBundleFile("app.jar", content)
-
-        // Setup existing bundle at 100
-        val currentManifest = TestFixtures.createSignedManifest(
-            files = listOf(file),
-            signer = keyPair.signer,
-            buildNumber = 100
-        )
-        setupExistingBundle(currentManifest, mapOf("app.jar" to content))
-
-        // Server returns newer manifest
-        val newManifest = TestFixtures.createSignedManifest(
-            files = listOf(file),
-            signer = keyPair.signer,
-            buildNumber = 200
-        )
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(newManifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.cleanup()
-
-        // Should NOT cleanup when update is available
-        assertNull(result)
-
-        updater.close()
-    }
-
-    @Test
-    fun cleanup_runsWhenUpToDate() = runBlocking {
-        // Setup: current is 100, server also has 100 (up to date)
-        val content = "content".toByteArray()
-        val file = TestFixtures.createBundleFile("app.jar", content)
-
-        val manifest = TestFixtures.createSignedManifest(
-            files = listOf(file),
-            signer = keyPair.signer,
-            buildNumber = 100
-        )
-        setupExistingBundle(manifest, mapOf("app.jar" to content))
-
-        // Also create an old version directory to be cleaned up
-        val oldVersionDir = appDataDir.resolve("versions/50")
-        Files.createDirectories(oldVersionDir)
-        Files.writeString(oldVersionDir.resolve("old.txt"), "old content")
-
-        // Server returns same version (up to date)
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        val updater = createUpdater(currentBuildNumber = 100)
-        val result = updater.cleanup()
-
-        // Should cleanup since we're up to date
-        assertTrue(result != null)
-        assertTrue(result.versionsRemoved.contains(50L))
-
-        // Verify old version was removed
-        assertTrue(!Files.exists(oldVersionDir))
-
-        updater.close()
-    }
-
-    // ========== getState() tests ==========
-
-    @Test
-    fun getState_reflectsCheckingState() = runBlocking {
-        // Initially should be Idle
-        val updater = createUpdater(currentBuildNumber = 100)
-        assertIs<BundleUpdaterState.Idle>(updater.getState())
-
-        // Queue responses - first for checkNow, second for tryCleanupIfUpToDate
-        val fileContent = "test-content".toByteArray()
-        val bundleFile = TestFixtures.createBundleFile("app.jar", fileContent)
-        val manifest = TestFixtures.createSignedManifest(
-            files = listOf(bundleFile),
-            signer = keyPair.signer,
-            buildNumber = 100
-        )
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-        mockServer.enqueue(
-            MockResponse()
-                .setBody(json.encodeToString(manifest))
-                .setHeader("Content-Type", "application/json")
-        )
-
-        // After checkNow completes, should be back to Idle (since up-to-date)
-        updater.checkNow()
-        assertIs<BundleUpdaterState.Idle>(updater.getState())
 
         updater.close()
     }

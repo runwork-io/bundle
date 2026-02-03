@@ -50,7 +50,7 @@ suspend fun startUpdateChecker(launchConfig: BundleLaunchConfig) {
     val updater = BundleUpdater(config)
 
     // Collect update events from the Flow
-    updater.start().collect { event ->
+    updater.runInBackground().collect { event ->
         when (event) {
             BundleUpdateEvent.Checking -> {
                 println("Checking for updates...")
