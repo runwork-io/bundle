@@ -178,10 +178,10 @@ class DownloadManager(
         manifest: BundleManifest,
         strategy: DownloadStrategy.FullBundle,
         progressCallback: suspend (DownloadProgress) -> Unit
-    ): DownloadResult = withContext(Dispatchers.IO) {
+    ): DownloadResult {
         val tempZip = storageManager.createTempFile("bundle")
 
-        try {
+        return try {
             // Get platform-specific bundle URL
             val bundleZipPath = manifest.bundleZipForPlatform(platform)
                 ?: throw DownloadException("No bundle zip available for platform: $platform")
@@ -237,13 +237,13 @@ class DownloadManager(
         manifest: BundleManifest,
         strategy: DownloadStrategy.Incremental,
         progressCallback: suspend (DownloadProgress) -> Unit
-    ): DownloadResult = withContext(Dispatchers.IO) {
+    ): DownloadResult {
         var totalDownloaded = 0L
         val totalBytes = strategy.totalSize
 
         for ((index, file) in strategy.files.withIndex()) {
             if (!coroutineContext.isActive) {
-                return@withContext DownloadResult.Cancelled
+                return DownloadResult.Cancelled
             }
 
             val tempFile = storageManager.createTempFile("file")
@@ -270,20 +270,20 @@ class DownloadManager(
                 // Verify and store the file
                 val stored = contentStore.storeWithHash(tempFile, file.hash)
                 if (!stored) {
-                    return@withContext DownloadResult.Failure("Hash mismatch for ${file.path}")
+                    return DownloadResult.Failure("Hash mismatch for ${file.path}")
                 }
 
                 totalDownloaded += file.size
             } catch (e: DownloadException) {
                 Files.deleteIfExists(tempFile)
-                return@withContext DownloadResult.Failure("Failed to download ${file.path}: ${e.message}", e)
+                return DownloadResult.Failure("Failed to download ${file.path}: ${e.message}", e)
             } catch (e: Exception) {
                 Files.deleteIfExists(tempFile)
-                return@withContext DownloadResult.Failure("Unexpected error downloading ${file.path}: ${e.message}", e)
+                return DownloadResult.Failure("Unexpected error downloading ${file.path}: ${e.message}", e)
             }
         }
 
-        DownloadResult.Success(manifest.buildNumber)
+        return DownloadResult.Success(manifest.buildNumber)
     }
 
     private suspend fun downloadFile(
@@ -304,7 +304,7 @@ class DownloadManager(
         destPath: Path,
         expectedSize: Long,
         progressCallback: suspend (Long, Long) -> Unit
-    ) = withContext(Dispatchers.IO) {
+    ) {
         val sourcePath = try {
             Paths.get(URI(url))
         } catch (e: Exception) {
@@ -393,7 +393,7 @@ class DownloadManager(
     private suspend fun extractAndStoreBundle(
         zipPath: Path,
         manifest: BundleManifest
-    ) = withContext(Dispatchers.IO) {
+    ) {
         // Create a map of path -> expected hash for files applicable to this platform
         val platformFiles = manifest.filesForPlatform(platform)
         val expectedHashes = platformFiles.associate { it.path to it.hash }

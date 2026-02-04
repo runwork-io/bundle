@@ -535,6 +535,264 @@ class IntegrationTest {
         downloadManager.close()
     }
 
+    // ========== FILE:// URL INTEGRATION TESTS ==========
+    // These tests exercise BundleUpdater.downloadLatest() with file:// URLs
+    // to prevent regressions like the nested withContext hang bug.
+
+    @Test
+    @Timeout(60)
+    fun fileUrl_downloadLatest_fullBundle() = runBlocking {
+        // Test full bundle download with file:// URL via BundleUpdater.downloadLatest()
+        // Uses small files to force full bundle ZIP strategy
+        val appDataDir = createTempDir("integration-fileurl-full")
+        val fileBundleDir = createTempDir("file-bundle-server-full")
+        val keyPair = TestFixtures.generateTestKeyPair()
+
+        // Create small files (< 10KB each) so full bundle is chosen over incremental
+        // Full bundle cost = total size (small)
+        // Incremental cost = missing size + numFiles * 50KB overhead (larger)
+        val file1Content = "content-file-1".toByteArray()
+        val file2Content = "content-file-2".toByteArray()
+        val file1 = TestFixtures.createBundleFile("lib/app.jar", file1Content)
+        val file2 = TestFixtures.createBundleFile("config.xml", file2Content)
+
+        val manifest = TestFixtures.createSignedManifest(
+            files = listOf(file1, file2),
+            signer = keyPair.signer,
+            buildNumber = 100,
+        )
+
+        // Create file-based bundle server with ZIP
+        val files = mapOf(
+            file1.hash to file1Content,
+            file2.hash to file2Content,
+        )
+        val baseUrl = TestFixtures.createFileBundleServer(fileBundleDir, manifest, files, includeZip = true)
+
+        val updater = createFileUrlBundleUpdater(appDataDir, baseUrl, keyPair.publicKeyBase64)
+
+        // Download using BundleUpdater.downloadLatest() - this was the hang point
+        val result = updater.downloadLatest()
+
+        assertIs<DownloadResult.Success>(result)
+
+        // Verify files end up in version directory
+        assertTrue(Files.exists(appDataDir.resolve("versions/100/lib/app.jar")))
+        assertTrue(Files.exists(appDataDir.resolve("versions/100/config.xml")))
+
+        // Verify manifest is saved
+        assertTrue(Files.exists(appDataDir.resolve("manifest.json")))
+
+        updater.close()
+    }
+
+    @Test
+    @Timeout(60)
+    fun fileUrl_downloadLatest_incremental() = runBlocking {
+        // Test incremental download with file:// URL via BundleUpdater.downloadLatest()
+        // Pre-seeds CAS with large existing files, only new file should be downloaded
+        val appDataDir = createTempDir("integration-fileurl-incremental")
+        val fileBundleDir = createTempDir("file-bundle-server-incremental")
+        val keyPair = TestFixtures.generateTestKeyPair()
+
+        // Create files: large existing file (already in CAS) + small new file
+        // Incremental cost = 10KB + 50KB overhead = 60KB
+        // Full bundle cost = 110KB
+        // Incremental wins!
+        val existingContent = "A".repeat(100_000).toByteArray() // 100KB
+        val newContent = "B".repeat(10_000).toByteArray() // 10KB
+
+        val existingFile = TestFixtures.createBundleFile("existing.jar", existingContent)
+        val newFile = TestFixtures.createBundleFile("new.jar", newContent)
+
+        val manifest = TestFixtures.createSignedManifest(
+            files = listOf(existingFile, newFile),
+            signer = keyPair.signer,
+            buildNumber = 100,
+        )
+
+        // Pre-seed the CAS with the existing file
+        val casDir = appDataDir.resolve("cas")
+        Files.createDirectories(casDir)
+        val existingHash = existingFile.hash.removePrefix("sha256:")
+        Files.write(casDir.resolve(existingHash), existingContent)
+
+        // Create file-based bundle server with only the new file
+        // (server only needs files that will be downloaded)
+        val files = mapOf(
+            existingFile.hash to existingContent,
+            newFile.hash to newContent,
+        )
+        val baseUrl = TestFixtures.createFileBundleServer(fileBundleDir, manifest, files, includeZip = false)
+
+        val updater = createFileUrlBundleUpdater(appDataDir, baseUrl, keyPair.publicKeyBase64)
+
+        // Download using BundleUpdater.downloadLatest()
+        val result = updater.downloadLatest()
+
+        assertIs<DownloadResult.Success>(result)
+
+        // Verify both files end up in version directory
+        assertTrue(Files.exists(appDataDir.resolve("versions/100/existing.jar")))
+        assertTrue(Files.exists(appDataDir.resolve("versions/100/new.jar")))
+
+        // Verify content
+        assertEquals(
+            String(existingContent),
+            Files.readString(appDataDir.resolve("versions/100/existing.jar"))
+        )
+        assertEquals(
+            String(newContent),
+            Files.readString(appDataDir.resolve("versions/100/new.jar"))
+        )
+
+        updater.close()
+    }
+
+    @Test
+    @Timeout(60)
+    fun fileUrl_downloadLatest_progressReporting() = runBlocking {
+        // Test that progress callbacks work correctly with file:// URLs via BundleUpdater.downloadLatest()
+        // This was the specific failure mode in the hang bug
+        val appDataDir = createTempDir("integration-fileurl-progress")
+        val fileBundleDir = createTempDir("file-bundle-server-progress")
+        val keyPair = TestFixtures.generateTestKeyPair()
+
+        // Create a medium-sized file to generate progress events
+        val content = "X".repeat(50_000).toByteArray() // 50KB
+        val file = TestFixtures.createBundleFile("data.bin", content)
+
+        val manifest = TestFixtures.createSignedManifest(
+            files = listOf(file),
+            signer = keyPair.signer,
+            buildNumber = 100,
+        )
+
+        val files = mapOf(file.hash to content)
+        val baseUrl = TestFixtures.createFileBundleServer(fileBundleDir, manifest, files, includeZip = true)
+
+        val updater = createFileUrlBundleUpdater(appDataDir, baseUrl, keyPair.publicKeyBase64)
+
+        // Collect progress events
+        val progressEvents = mutableListOf<DownloadProgress>()
+        val result = updater.downloadLatest { progress ->
+            progressEvents.add(progress)
+        }
+
+        assertIs<DownloadResult.Success>(result)
+
+        // Verify progress events were received (main test for the hang bug fix)
+        assertTrue(progressEvents.isNotEmpty(), "Should receive progress events")
+
+        // Verify progress is monotonically increasing
+        var lastBytes = 0L
+        for (progress in progressEvents) {
+            assertTrue(progress.bytesDownloaded >= lastBytes, "Progress should be monotonically increasing")
+            lastBytes = progress.bytesDownloaded
+        }
+
+        // Verify final progress matches expected
+        val lastProgress = progressEvents.last()
+        assertTrue(lastProgress.bytesDownloaded > 0, "Should have downloaded some bytes")
+
+        updater.close()
+    }
+
+    @Test
+    @Timeout(60)
+    fun fileUrl_downloadLatest_alreadyUpToDate() = runBlocking {
+        // Test that same-version returns AlreadyUpToDate (via existing manifest.json on disk)
+        val appDataDir = createTempDir("integration-fileurl-uptodate")
+        val fileBundleDir = createTempDir("file-bundle-server-uptodate")
+        val keyPair = TestFixtures.generateTestKeyPair()
+
+        val content = "content".toByteArray()
+        val file = TestFixtures.createBundleFile("app.jar", content)
+
+        val manifest = TestFixtures.createSignedManifest(
+            files = listOf(file),
+            signer = keyPair.signer,
+            buildNumber = 100,
+        )
+
+        // Setup existing bundle on disk so getCurrentBuildNumber() returns 100
+        setupExistingBundle(appDataDir, manifest, mapOf("app.jar" to content))
+
+        val files = mapOf(file.hash to content)
+        val baseUrl = TestFixtures.createFileBundleServer(fileBundleDir, manifest, files, includeZip = true)
+
+        // Create updater (currentBuildNumber config is not used by downloadLatest - it reads from disk)
+        val updater = createFileUrlBundleUpdater(
+            appDataDir,
+            baseUrl,
+            keyPair.publicKeyBase64,
+        )
+
+        val result = updater.downloadLatest()
+
+        assertIs<DownloadResult.AlreadyUpToDate>(result)
+
+        updater.close()
+    }
+
+    @Test
+    @Timeout(60)
+    fun fileUrl_downloadLatest_signatureVerificationFails() = runBlocking {
+        // Test that invalid signature is rejected with file:// URLs
+        val appDataDir = createTempDir("integration-fileurl-signature-fail")
+        val fileBundleDir = createTempDir("file-bundle-server-signature-fail")
+
+        // Use two different key pairs
+        val serverKeyPair = TestFixtures.generateTestKeyPair()
+        val clientKeyPair = TestFixtures.generateTestKeyPair()
+
+        val content = "content".toByteArray()
+        val file = TestFixtures.createBundleFile("app.jar", content)
+
+        // Sign with server's key
+        val manifest = TestFixtures.createSignedManifest(
+            files = listOf(file),
+            signer = serverKeyPair.signer,
+            buildNumber = 100,
+        )
+
+        val files = mapOf(file.hash to content)
+        val baseUrl = TestFixtures.createFileBundleServer(fileBundleDir, manifest, files, includeZip = true)
+
+        // Configure updater with client's public key (different from server's)
+        val updater = createFileUrlBundleUpdater(appDataDir, baseUrl, clientKeyPair.publicKeyBase64)
+
+        val result = updater.downloadLatest()
+
+        // Should fail signature verification
+        assertIs<DownloadResult.Failure>(result)
+        assertTrue(result.error.contains("signature", ignoreCase = true))
+
+        updater.close()
+    }
+
+    /**
+     * Helper to create a BundleUpdater configured for file:// URLs.
+     */
+    private fun createFileUrlBundleUpdater(
+        appDataDir: Path,
+        baseUrl: String,
+        publicKey: String,
+        currentBuildNumber: Long = 0,
+    ): BundleUpdater {
+        val config = BundleUpdaterConfig(
+            appDataDir = appDataDir,
+            bundleSubdirectory = "",
+            baseUrl = baseUrl,
+            publicKey = publicKey,
+            currentBuildNumber = currentBuildNumber,
+            platform = Platform.fromString("macos-arm64"),
+        )
+        return BundleUpdater(config)
+    }
+
+    // ========== EXISTING DOWNGRADE TEST ==========
+
     @Test
     fun bundleSelfUpdate_preventsDowngrade() = runBlocking {
         // Test that attempting to "update" to an older version is prevented
