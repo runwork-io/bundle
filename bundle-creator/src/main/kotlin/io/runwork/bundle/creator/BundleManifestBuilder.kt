@@ -38,7 +38,7 @@ class BundleManifestBuilder {
      * @param shellUpdateUrl Optional URL for shell updates
      * @return Unsigned manifest (signature field is empty)
      */
-    suspend fun build(
+    fun build(
         inputDir: File,
         targetPlatforms: List<String>,
         buildNumber: Long,
@@ -87,7 +87,7 @@ class BundleManifestBuilder {
      * @param inputDir Directory to scan
      * @return List of BundleFile entries with platform constraints
      */
-    suspend fun collectFilesWithPlatformConstraints(inputDir: File): List<BundleFile> {
+    fun collectFilesWithPlatformConstraints(inputDir: File): List<BundleFile> {
         val files = inputDir.walkTopDown()
             .filter { it.isFile }
             .toList()
@@ -102,7 +102,7 @@ class BundleManifestBuilder {
             result.add(
                 BundleFile(
                     path = relativePath,
-                    hash = HashVerifier.computeHash(file.toPath()),
+                    hash = HashVerifier.computeHashSync(file.toPath()),
                     size = file.length(),
                     os = os,
                     arch = arch,

@@ -22,15 +22,29 @@ import java.nio.file.Path
 object HashVerifier {
 
     /**
-     * Compute the SHA-256 hash of a file.
+     * Compute the SHA-256 hash of a file (suspending version).
+     *
+     * Offloads I/O to the IO dispatcher for use in coroutine contexts.
      *
      * @param path Path to the file
      * @return SHA-256 hash prefixed with "sha256:"
      */
     suspend fun computeHash(path: Path): String = withContext(Dispatchers.IO) {
+        computeHashSync(path)
+    }
+
+    /**
+     * Compute the SHA-256 hash of a file (synchronous version).
+     *
+     * Use this when calling from non-coroutine contexts (e.g., Gradle tasks).
+     *
+     * @param path Path to the file
+     * @return SHA-256 hash prefixed with "sha256:"
+     */
+    fun computeHashSync(path: Path): String {
         HashingSource.sha256(FileSystem.SYSTEM.source(path.toOkioPath())).use { hashingSource ->
             hashingSource.buffer().readAll(blackholeSink())
-            "sha256:" + hashingSource.hash.hex()
+            return "sha256:" + hashingSource.hash.hex()
         }
     }
 
