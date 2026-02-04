@@ -5,7 +5,6 @@ import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.gradle.api.DefaultTask
@@ -206,9 +205,7 @@ abstract class BundleCreatorTask : DefaultTask() {
         val signer = BundleManifestSigner.fromBase64(privateKeyBase64)
 
         // Collect files with platform constraints
-        val bundleFiles = runBlocking {
-            manifestBuilder.collectFilesWithPlatformConstraints(inputDir)
-        }
+        val bundleFiles = manifestBuilder.collectFilesWithPlatformConstraints(inputDir)
 
         logger.lifecycle("Creating multi-platform bundle:")
         logger.lifecycle("  Input: ${inputDir.absolutePath}")
