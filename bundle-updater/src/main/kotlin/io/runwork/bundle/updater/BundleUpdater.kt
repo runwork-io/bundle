@@ -156,13 +156,11 @@ class BundleUpdater(
     }
 
     private suspend fun finalizeUpdate(manifest: BundleManifest) {
-        storageManager.withStorageLock {
-            // Prepare version directory (hard links from CAS for this platform's files)
-            storageManager.prepareVersion(manifest, config.platform)
-
-            // Save manifest
-            storageManager.saveManifest(json.encodeToString(manifest))
-        }
+        // Prepare version directory (hard links from CAS for this platform's files)
+        // Note: prepareVersion and saveManifest each acquire the storage lock internally,
+        // so we don't wrap them in an outer lock to avoid deadlock (Mutex is not reentrant).
+        storageManager.prepareVersion(manifest, config.platform)
+        storageManager.saveManifest(json.encodeToString(manifest))
     }
 
     private suspend fun ProducerScope<BundleUpdateEvent>.checkAndDownloadUpdate() {
