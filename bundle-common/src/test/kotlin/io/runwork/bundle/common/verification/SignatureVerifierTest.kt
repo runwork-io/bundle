@@ -4,6 +4,9 @@ import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.TestFixtures
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleFileHash
+import io.runwork.bundle.common.manifest.BundleManifest
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -199,5 +202,134 @@ class SignatureVerifierTest {
         val result = verifier.verifyManifest(tamperedManifest)
 
         assertFalse(result)
+    }
+
+    // ====== verifyManifestJson tests ======
+
+    @Test
+    fun verifyManifestJson_compactManifestWithValidSignature() {
+        val (privateKey, verifier) = generateTestKeyPair()
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                    size = 1000,
+                )
+            )
+        )
+
+        // Sign and produce compact JSON (same as BundleCreatorTask would)
+        val signingJson = BundleJson.signingJson
+        val unsignedJson = signingJson.encodeToString(manifest)
+        val signature = sign(privateKey, unsignedJson.toByteArray(Charsets.UTF_8))
+        val signedManifest = manifest.copy(signature = "ed25519:$signature")
+        val compactJson = signingJson.encodeToString(signedManifest)
+
+        assertTrue(verifier.verifyManifestJson(compactJson))
+    }
+
+    @Test
+    fun verifyManifestJson_compactManifestWithUnknownKeysAndValidSignature() {
+        val (privateKey, verifier) = generateTestKeyPair()
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                    size = 1000,
+                )
+            )
+        )
+
+        // Simulate a future creator that adds an unknown field and signs the full
+        // unsigned JSON (including the unknown field). An older client must still
+        // verify successfully despite not recognizing "futureField".
+        val signingJson = BundleJson.signingJson
+        val unsignedJson = signingJson.encodeToString(manifest)
+        val unsignedWithExtra = unsignedJson.dropLast(1) + ",\"futureField\":\"hello\"}"
+        val signature = sign(privateKey, unsignedWithExtra.toByteArray(Charsets.UTF_8))
+        val distributionJson = unsignedWithExtra.dropLast(1) + ",\"signature\":\"ed25519:$signature\"}"
+
+        assertTrue(verifier.verifyManifestJson(distributionJson))
+    }
+
+    @Test
+    fun verifyManifestJson_compactManifestWithTamperedData() {
+        val (privateKey, verifier) = generateTestKeyPair()
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                    size = 1000,
+                )
+            )
+        )
+
+        // Sign and produce compact JSON
+        val signingJson = BundleJson.signingJson
+        val unsignedJson = signingJson.encodeToString(manifest)
+        val signature = sign(privateKey, unsignedJson.toByteArray(Charsets.UTF_8))
+        val signedManifest = manifest.copy(signature = "ed25519:$signature")
+        val compactJson = signingJson.encodeToString(signedManifest)
+
+        // Tamper: change buildNumber from 1 to 9
+        val tampered = compactJson.replace("\"buildNumber\":1", "\"buildNumber\":9")
+
+        assertFalse(verifier.verifyManifestJson(tampered))
+    }
+
+    @Test
+    fun verifyManifestJson_prettyPrintedLegacyManifestWithValidSignature() {
+        val (privateKey, verifier) = generateTestKeyPair()
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                    size = 1000,
+                )
+            )
+        )
+
+        // Sign using the signing JSON (compact)
+        val signingJson = BundleJson.signingJson
+        val unsignedJson = signingJson.encodeToString(manifest)
+        val signature = sign(privateKey, unsignedJson.toByteArray(Charsets.UTF_8))
+        val signedManifest = manifest.copy(signature = "ed25519:$signature")
+
+        // Write as pretty-printed JSON (legacy format)
+        val prettyJson = Json { prettyPrint = true }
+        val prettyPrintedJson = prettyJson.encodeToString(signedManifest)
+
+        // The fast path won't match (not compact), so it should fall back to
+        // round-trip verification through the Kotlin data class.
+        assertTrue(verifier.verifyManifestJson(prettyPrintedJson))
+    }
+
+    @Test
+    fun verifyManifestJson_returnsFalseForEmptySignature() {
+        val (_, verifier) = generateTestKeyPair()
+
+        val manifest = TestFixtures.createTestManifest(
+            files = listOf(
+                BundleFile(
+                    path = "app.jar",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                    size = 1000,
+                )
+            )
+        )
+
+        // Compact JSON with no signature field (encodeDefaults=false omits signature="")
+        val signingJson = BundleJson.signingJson
+        val jsonWithoutSig = signingJson.encodeToString(manifest)
+
+        assertFalse(verifier.verifyManifestJson(jsonWithoutSig))
     }
 }

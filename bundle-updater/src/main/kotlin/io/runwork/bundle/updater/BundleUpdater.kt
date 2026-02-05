@@ -18,8 +18,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.Closeable
 
 /**
@@ -41,7 +39,6 @@ class BundleUpdater(
     private val cleanupManager = CleanupManager(storageManager, config.bundleDir, config.platform)
     private val downloadManager = DownloadManager(config.baseUrl, storageManager, config.platform)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
-    private val json = Json { ignoreUnknownKeys = true }
 
     // ============ ONE-SHOT API (used by shell for initial download) ============
 
@@ -59,8 +56,8 @@ class BundleUpdater(
     ): DownloadResult {
         return try {
             // Fetch and verify manifest
-            val manifest = when (val result = fetchAndVerifyManifest()) {
-                is ManifestFetchResult.Success -> result.manifest
+            val (manifest, rawJson) = when (val result = fetchAndVerifyManifest()) {
+                is ManifestFetchResult.Success -> Pair(result.manifest, result.rawJson)
                 is ManifestFetchResult.NetworkError ->
                     return DownloadResult.Failure(result.message, result.cause)
                 is ManifestFetchResult.SignatureFailure ->
@@ -84,7 +81,7 @@ class BundleUpdater(
 
             if (result is DownloadResult.Success) {
                 // Prepare version directory and update current pointer
-                finalizeUpdate(manifest)
+                finalizeUpdate(manifest, rawJson)
             }
 
             result
@@ -125,7 +122,7 @@ class BundleUpdater(
     // ============ INTERNAL ============
 
     private sealed class ManifestFetchResult {
-        data class Success(val manifest: BundleManifest) : ManifestFetchResult()
+        data class Success(val manifest: BundleManifest, val rawJson: String) : ManifestFetchResult()
         data class NetworkError(val message: String, val cause: Throwable) : ManifestFetchResult()
         data class SignatureFailure(val message: String) : ManifestFetchResult()
         data class PlatformMismatch(val expected: String, val actual: String) : ManifestFetchResult()
@@ -133,42 +130,44 @@ class BundleUpdater(
 
     private suspend fun fetchAndVerifyManifest(): ManifestFetchResult {
         return try {
-            val manifest = downloadManager.fetchManifest()
+            val fetched = downloadManager.fetchManifest()
 
-            // Verify signature
-            if (!signatureVerifier.verifyManifest(manifest)) {
+            // Verify signature against raw JSON (forward-compatible with unknown fields)
+            if (!signatureVerifier.verifyManifestJson(fetched.rawJson)) {
                 return ManifestFetchResult.SignatureFailure("Manifest signature verification failed")
             }
 
             // Verify platform is supported
-            if (!manifest.supportsPlatform(config.platform)) {
-                val supported = manifest.zips.keys.sorted().joinToString(", ")
+            if (!fetched.manifest.supportsPlatform(config.platform)) {
+                val supported = fetched.manifest.zips.keys.sorted().joinToString(", ")
                 return ManifestFetchResult.PlatformMismatch(
                     expected = config.platform.toString(),
                     actual = supported
                 )
             }
 
-            ManifestFetchResult.Success(manifest)
+            ManifestFetchResult.Success(fetched.manifest, fetched.rawJson)
         } catch (e: Exception) {
             ManifestFetchResult.NetworkError(e.message ?: "Failed to fetch manifest", e)
         }
     }
 
-    private suspend fun finalizeUpdate(manifest: BundleManifest) {
+    private suspend fun finalizeUpdate(manifest: BundleManifest, rawJson: String) {
         // Prepare version directory (hard links from CAS for this platform's files)
         // Note: prepareVersion and saveManifest each acquire the storage lock internally,
         // so we don't wrap them in an outer lock to avoid deadlock (Mutex is not reentrant).
         storageManager.prepareVersion(manifest, config.platform)
-        storageManager.saveManifest(json.encodeToString(manifest))
+        // Save the raw JSON directly to preserve unknown fields for forward-compatible
+        // signature verification on subsequent bootstrap validations.
+        storageManager.saveManifest(rawJson)
     }
 
     private suspend fun ProducerScope<BundleUpdateEvent>.checkAndDownloadUpdate() {
         try {
             send(BundleUpdateEvent.Checking)
 
-            val manifest = when (val result = fetchAndVerifyManifest()) {
-                is ManifestFetchResult.Success -> result.manifest
+            val (manifest, rawJson) = when (val result = fetchAndVerifyManifest()) {
+                is ManifestFetchResult.Success -> Pair(result.manifest, result.rawJson)
                 is ManifestFetchResult.NetworkError -> {
                     val error = UpdateError(result.message, result.cause)
                     send(BundleUpdateEvent.Error(error))
@@ -200,7 +199,7 @@ class BundleUpdater(
 
             if (strategy is DownloadStrategy.NoDownloadNeeded) {
                 // Files already in CAS, just finalize
-                finalizeUpdate(manifest)
+                finalizeUpdate(manifest, rawJson)
                 send(BundleUpdateEvent.UpdateReady(manifest.buildNumber))
                 return
             }
@@ -230,7 +229,7 @@ class BundleUpdater(
 
             when (result) {
                 is DownloadResult.Success -> {
-                    finalizeUpdate(manifest)
+                    finalizeUpdate(manifest, rawJson)
                     send(BundleUpdateEvent.UpdateReady(manifest.buildNumber))
                 }
                 is DownloadResult.AlreadyUpToDate -> {

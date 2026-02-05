@@ -204,12 +204,12 @@ class IntegrationTest {
         )
 
         // Step 1: Fetch manifest to check for update
-        val fetchedManifest = downloadManager.fetchManifest()
-        assertEquals(200, fetchedManifest.buildNumber)
-        assertTrue(fetchedManifest.buildNumber > 100, "Update should be newer than current")
+        val fetched = downloadManager.fetchManifest()
+        assertEquals(200, fetched.manifest.buildNumber)
+        assertTrue(fetched.manifest.buildNumber > 100, "Update should be newer than current")
 
         // Step 2: Download the update (incremental - only new file)
-        val downloadResult = downloadManager.downloadBundle(fetchedManifest) {}
+        val downloadResult = downloadManager.downloadBundle(fetched.manifest) {}
 
         // Debug: print download result
         if (downloadResult is DownloadResult.Failure) {
@@ -219,8 +219,8 @@ class IntegrationTest {
         assertIs<DownloadResult.Success>(downloadResult)
 
         // Step 3: Prepare new version
-        storageManager.prepareVersion(fetchedManifest, platform)
-        storageManager.saveManifest(json.encodeToString(fetchedManifest))
+        storageManager.prepareVersion(fetched.manifest, platform)
+        storageManager.saveManifest(fetched.rawJson)
 
         // Verify new version is prepared
         assertTrue(Files.exists(appDataDir.resolve("versions/200/app.jar")))
@@ -265,7 +265,6 @@ class IntegrationTest {
         // Step 3: Build manifest
         val manifest = builder.build(
             inputDir = inputDir.toFile(),
-            targetPlatforms = targetPlatforms,
             buildNumber = 12345,
             mainClass = "com.example.MainKt",
             minShellVersion = 1,

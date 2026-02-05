@@ -11,7 +11,6 @@ import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.KeyFactory
@@ -33,7 +32,7 @@ class BootstrapTest {
     private lateinit var appDataDir: Path
     private lateinit var keyPair: TestKeyPair
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = BundleJson.decodingJson
 
     @BeforeTest
     fun setUp() {
