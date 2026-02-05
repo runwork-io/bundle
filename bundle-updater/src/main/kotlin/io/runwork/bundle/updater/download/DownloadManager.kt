@@ -8,6 +8,7 @@ import io.runwork.bundle.updater.result.DownloadResult
 import io.runwork.bundle.updater.storage.StorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -16,13 +17,19 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
+import okio.FileSystem
+import okio.ForwardingSource
+import okio.Path.Companion.toOkioPath
+import okio.Source
+import okio.buffer
+import okio.source
 import java.io.Closeable
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.zip.ZipInputStream
 import kotlin.coroutines.coroutineContext
@@ -84,7 +91,7 @@ class DownloadManager(
         }
 
         val body = try {
-            Files.readString(path)
+            FileSystem.SYSTEM.read(path.toOkioPath()) { readUtf8() }
         } catch (e: IOException) {
             throw DownloadException("Failed to read file: $path", e)
         }
@@ -157,7 +164,7 @@ class DownloadManager(
      */
     suspend fun downloadBundle(
         manifest: BundleManifest,
-        progressCallback: suspend (DownloadProgress) -> Unit
+        progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult = withContext(Dispatchers.IO) {
         when (val strategy = UpdateDecider.decide(manifest, platform, contentStore)) {
             is DownloadStrategy.NoDownloadNeeded -> {
@@ -177,7 +184,7 @@ class DownloadManager(
     private suspend fun downloadFullBundle(
         manifest: BundleManifest,
         strategy: DownloadStrategy.FullBundle,
-        progressCallback: suspend (DownloadProgress) -> Unit
+        progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult {
         val tempZip = storageManager.createTempFile("bundle")
 
@@ -193,18 +200,17 @@ class DownloadManager(
                 url = bundleUrl,
                 destPath = tempZip,
                 expectedSize = strategy.totalSize,
-                progressCallback = { downloaded, total ->
-                    progressCallback(
-                        DownloadProgress(
-                            bytesDownloaded = downloaded,
-                            totalBytes = total,
-                            currentFile = bundleZipPath,
-                            filesCompleted = 0,
-                            totalFiles = 1
-                        )
+            ) { bytesRead, totalBytes ->
+                progressCallback(
+                    DownloadProgress(
+                        bytesDownloaded = bytesRead,
+                        totalBytes = totalBytes,
+                        currentFile = bundleZipPath,
+                        filesCompleted = 0,
+                        totalFiles = 1
                     )
-                }
-            )
+                )
+            }
 
             // Extract and store files from ZIP (only files for this platform)
             extractAndStoreBundle(tempZip, manifest)
@@ -236,7 +242,7 @@ class DownloadManager(
     private suspend fun downloadIncremental(
         manifest: BundleManifest,
         strategy: DownloadStrategy.Incremental,
-        progressCallback: suspend (DownloadProgress) -> Unit
+        progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult {
         var totalDownloaded = 0L
         val totalBytes = strategy.totalSize
@@ -250,22 +256,22 @@ class DownloadManager(
 
             try {
                 val hash = file.hash.hex
+                val baseDownloaded = totalDownloaded
                 downloadFile(
                     url = "$baseUrl/files/$hash",
                     destPath = tempFile,
                     expectedSize = file.size,
-                    progressCallback = { downloaded, _ ->
-                        progressCallback(
-                            DownloadProgress(
-                                bytesDownloaded = totalDownloaded + downloaded,
-                                totalBytes = totalBytes,
-                                currentFile = file.path,
-                                filesCompleted = index,
-                                totalFiles = strategy.files.size
-                            )
+                ) { bytesRead, _ ->
+                    progressCallback(
+                        DownloadProgress(
+                            bytesDownloaded = baseDownloaded + bytesRead,
+                            totalBytes = totalBytes,
+                            currentFile = file.path,
+                            filesCompleted = index,
+                            totalFiles = strategy.files.size
                         )
-                    }
-                )
+                    )
+                }
 
                 // Verify and store the file
                 val stored = contentStore.storeWithHash(tempFile, file.hash)
@@ -289,8 +295,8 @@ class DownloadManager(
     private suspend fun downloadFile(
         url: String,
         destPath: Path,
-        expectedSize: Long,
-        progressCallback: suspend (Long, Long) -> Unit
+        expectedSize: Long = -1L,
+        progressCallback: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         if (isFileUrl(url)) {
             downloadFileFromFilesystem(url, destPath, expectedSize, progressCallback)
@@ -302,8 +308,8 @@ class DownloadManager(
     private suspend fun downloadFileFromFilesystem(
         url: String,
         destPath: Path,
-        expectedSize: Long,
-        progressCallback: suspend (Long, Long) -> Unit
+        expectedSize: Long = -1L,
+        progressCallback: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         val sourcePath = try {
             Paths.get(URI(url))
@@ -315,25 +321,18 @@ class DownloadManager(
             throw DownloadException("File not found: $sourcePath")
         }
 
-        Files.newInputStream(sourcePath).use { input ->
-            Files.newOutputStream(
-                destPath,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING
-            ).use { output ->
-                val buffer = ByteArray(8192)
-                var totalBytesRead = 0L
-                var bytesRead: Int
+        val job = coroutineContext[Job]
 
-                while (input.read(buffer).also { b -> bytesRead = b } != -1) {
-                    if (!coroutineContext.isActive) {
-                        throw DownloadException("Download cancelled")
-                    }
-
-                    output.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-                    progressCallback(totalBytesRead, expectedSize)
+        withContext(Dispatchers.IO) {
+            FileSystem.SYSTEM.source(sourcePath.toOkioPath()).let { source ->
+                when {
+                    progressCallback != null -> ProgressSource(source, expectedSize, progressCallback, job)
+                    job != null -> CancellableSource(source, job)
+                    else -> source
+                }
+            }.use { source ->
+                FileSystem.SYSTEM.sink(destPath.toOkioPath()).buffer().use { sink ->
+                    sink.writeAll(source)
                 }
             }
         }
@@ -342,8 +341,8 @@ class DownloadManager(
     private suspend fun downloadFileFromHttp(
         url: String,
         destPath: Path,
-        expectedSize: Long,
-        progressCallback: suspend (Long, Long) -> Unit
+        expectedSize: Long = -1L,
+        progressCallback: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         val request = Request.Builder()
             .url(url)
@@ -356,6 +355,8 @@ class DownloadManager(
             throw DownloadException("Failed to connect: $url", e)
         }
 
+        val job = coroutineContext[Job]
+
         response.use {
             if (!it.isSuccessful) {
                 throw DownloadException("HTTP ${it.code} for $url")
@@ -364,26 +365,15 @@ class DownloadManager(
             val body = it.body ?: throw DownloadException("Empty response for $url")
 
             withContext(Dispatchers.IO) {
-                Files.newOutputStream(
-                    destPath,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-                ).use { output ->
-                    body.byteStream().use { input ->
-                        val buffer = ByteArray(8192)
-                        var totalBytesRead = 0L
-                        var bytesRead: Int
-
-                        while (input.read(buffer).also { b -> bytesRead = b } != -1) {
-                            if (!coroutineContext.isActive) {
-                                throw DownloadException("Download cancelled")
-                            }
-
-                            output.write(buffer, 0, bytesRead)
-                            totalBytesRead += bytesRead
-                            progressCallback(totalBytesRead, expectedSize)
-                        }
+                body.source().let { source ->
+                    when {
+                        progressCallback != null -> ProgressSource(source, expectedSize, progressCallback, job)
+                        job != null -> CancellableSource(source, job)
+                        else -> source
+                    }
+                }.use { source ->
+                    FileSystem.SYSTEM.sink(destPath.toOkioPath()).buffer().use { sink ->
+                        sink.writeAll(source)
                     }
                 }
             }
@@ -407,8 +397,8 @@ class DownloadManager(
                         // Write to temp file
                         val tempFile = storageManager.createTempFile("extract")
                         try {
-                            Files.newOutputStream(tempFile).use { output ->
-                                zip.copyTo(output)
+                            FileSystem.SYSTEM.sink(tempFile.toOkioPath()).buffer().use { sink ->
+                                sink.writeAll(zip.source())
                             }
 
                             // Verify and store
@@ -425,6 +415,35 @@ class DownloadManager(
                 zip.closeEntry()
                 entry = zip.nextEntry
             }
+        }
+    }
+
+    private class ProgressSource(
+        source: Source,
+        private val expectedSize: Long,
+        private val onProgress: (bytesRead: Long, totalBytes: Long) -> Unit,
+        private val job: Job? = null,
+    ) : ForwardingSource(source) {
+        private var bytesRead = 0L
+
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            if (job?.isActive == false) throw IOException("Download cancelled")
+            val read = super.read(sink, byteCount)
+            if (read != -1L) {
+                bytesRead += read
+                onProgress(bytesRead, expectedSize)
+            }
+            return read
+        }
+    }
+
+    private class CancellableSource(
+        source: Source,
+        private val job: Job,
+    ) : ForwardingSource(source) {
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            if (!job.isActive) throw IOException("Download cancelled")
+            return super.read(sink, byteCount)
         }
     }
 

@@ -20,6 +20,7 @@ kotlin {
 dependencies {
     api(project(":bundle-common"))
     implementation(libs.okhttp)
+    implementation(libs.okio)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
