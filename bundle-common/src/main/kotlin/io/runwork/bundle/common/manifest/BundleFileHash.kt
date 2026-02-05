@@ -9,18 +9,20 @@ import kotlinx.serialization.encoding.Encoder
 
 @Serializable(with = BundleFileHashSerializer::class)
 data class BundleFileHash(
-    val type: String,
-    val value: String,
+    val algorithm: String,
+    val hex: String,
 ) {
-    override fun toString(): String = "$type:$value"
+    override fun toString(): String = "$algorithm:$hex"
 
     companion object {
         fun parse(hash: String): BundleFileHash {
             val colonIndex = hash.indexOf(':')
-            require(colonIndex > 0) { "Invalid hash format, expected 'type:value': $hash" }
+            require(colonIndex > 0) { "Invalid hash format, expected 'algorithm:hex': $hash" }
+            val hex = hash.substring(colonIndex + 1)
+            require(hex.isNotEmpty()) { "Invalid hash format, hex value is empty: $hash" }
             return BundleFileHash(
-                type = hash.substring(0, colonIndex),
-                value = hash.substring(colonIndex + 1),
+                algorithm = hash.substring(0, colonIndex),
+                hex = hex,
             )
         }
     }

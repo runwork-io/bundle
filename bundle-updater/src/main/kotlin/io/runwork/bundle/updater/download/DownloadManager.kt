@@ -249,7 +249,7 @@ class DownloadManager(
             val tempFile = storageManager.createTempFile("file")
 
             try {
-                val hash = file.hash.value
+                val hash = file.hash.hex
                 downloadFile(
                     url = "$baseUrl/files/$hash",
                     destPath = tempFile,

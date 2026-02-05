@@ -222,7 +222,7 @@ abstract class BundleCreatorTask : DefaultTask() {
         // Copy all files to files/ directory (content-addressable)
         for (bundleFile in bundleFiles) {
             val sourceFile = File(inputDir, bundleFile.path)
-            val hashFileName = bundleFile.hash.value
+            val hashFileName = bundleFile.hash.hex
             val destFile = File(filesDir, hashFileName)
 
             if (!destFile.exists()) {

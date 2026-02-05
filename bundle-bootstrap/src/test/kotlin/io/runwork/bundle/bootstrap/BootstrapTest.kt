@@ -198,7 +198,7 @@ class BootstrapTest {
         // Create CAS directory and write WRONG content to CAS file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.value
+        val hashFileName = bundleFile.hash.hex
         Files.write(casDir.resolve(hashFileName), "corrupted content".toByteArray())
 
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
@@ -227,7 +227,7 @@ class BootstrapTest {
         // Create CAS file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.value
+        val hashFileName = bundleFile.hash.hex
         val casFile = casDir.resolve(hashFileName)
         Files.write(casFile, fileContent.toByteArray())
 
@@ -261,7 +261,7 @@ class BootstrapTest {
         // Create CAS file with correct content
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.value
+        val hashFileName = bundleFile.hash.hex
         val casFile = casDir.resolve(hashFileName)
         Files.write(casFile, originalContent.toByteArray())
 
@@ -363,8 +363,8 @@ class BootstrapTest {
         for (bundleFile in manifest.files) {
             val content = files[bundleFile.hash]
             if (content != null) {
-                // Write to CAS (filename is the hash without "sha256:" prefix)
-                val hashFileName = bundleFile.hash.value
+                // Write to CAS (filename is the hash hex)
+                val hashFileName = bundleFile.hash.hex
                 val casFile = casDir.resolve(hashFileName)
                 Files.write(casFile, content)
 

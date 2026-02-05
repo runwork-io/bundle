@@ -175,7 +175,7 @@ object TestFixtures {
      *   manifest.json           # Bundle manifest JSON
      *   bundle-{platform}.zip   # Per-platform bundle ZIPs (optional)
      *   files/
-     *     <hash1>               # Individual files by hash (no sha256: prefix)
+     *     <hash1>               # Individual files by hash hex
      *     <hash2>
      * ```
      *
@@ -199,9 +199,9 @@ object TestFixtures {
         val manifestPath = baseDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
 
-        // Write individual files by hash (without sha256: prefix)
+        // Write individual files by hash hex
         for ((hash, content) in files) {
-            val hashWithoutPrefix = hash.value
+            val hashWithoutPrefix = hash.hex
             val filePath = filesDir.resolve(hashWithoutPrefix)
             Files.write(filePath, content)
         }

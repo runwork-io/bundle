@@ -138,8 +138,8 @@ class BundleUpdaterTest {
             Files.createDirectories(filePath.parent)
             Files.write(filePath, content)
 
-            // Also write to CAS (without sha256: prefix)
-            val casPath = casDir.resolve(file.hash.value)
+            // Also write to CAS
+            val casPath = casDir.resolve(file.hash.hex)
             Files.write(casPath, content)
         }
 

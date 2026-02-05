@@ -224,8 +224,8 @@ class BundleManifestBuilder {
     fun computeContentFingerprint(files: List<BundleFile>): String {
         val sortedHashes = files.map { it.hash.toString() }.sorted().joinToString(",")
         val fullHash = HashVerifier.computeHash(sortedHashes.toByteArray())
-        // Return first 8 chars of hash (without "sha256:" prefix) for filename
-        return fullHash.value.take(8)
+        // Return first 8 chars of hash hex for filename
+        return fullHash.hex.take(8)
     }
 
     /**

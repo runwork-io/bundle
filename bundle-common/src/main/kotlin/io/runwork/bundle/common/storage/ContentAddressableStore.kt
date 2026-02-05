@@ -33,7 +33,7 @@ class ContentAddressableStore(
      * @param hash The file hash
      */
     suspend fun contains(hash: BundleFileHash): Boolean = withContext(Dispatchers.IO) {
-        Files.exists(storeDir.resolve(hash.value))
+        Files.exists(storeDir.resolve(hash.hex))
     }
 
     /**
@@ -42,7 +42,7 @@ class ContentAddressableStore(
      * @param hash The file hash
      */
     suspend fun getPath(hash: BundleFileHash): Path? = withContext(Dispatchers.IO) {
-        val path = storeDir.resolve(hash.value)
+        val path = storeDir.resolve(hash.hex)
         if (Files.exists(path)) path else null
     }
 
@@ -58,7 +58,7 @@ class ContentAddressableStore(
     suspend fun store(tempFile: Path): BundleFileHash {
         ensureDirectoryExists()
         val hash = computeHash(tempFile)
-        val destPath = storeDir.resolve(hash.value)
+        val destPath = storeDir.resolve(hash.hex)
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
@@ -104,7 +104,7 @@ class ContentAddressableStore(
             return false
         }
 
-        val destPath = storeDir.resolve(expectedHash.value)
+        val destPath = storeDir.resolve(expectedHash.hex)
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
@@ -136,7 +136,7 @@ class ContentAddressableStore(
      * @return true if the file was deleted, false if it didn't exist
      */
     suspend fun delete(hash: BundleFileHash): Boolean = withContext(Dispatchers.IO) {
-        val path = storeDir.resolve(hash.value)
+        val path = storeDir.resolve(hash.hex)
         Files.deleteIfExists(path)
     }
 
@@ -149,6 +149,7 @@ class ContentAddressableStore(
         Files.list(storeDir).use { stream ->
             stream
                 .filter { Files.isRegularFile(it) }
+                // All files in the CAS are stored via SHA-256 hashing, so we can assume the algorithm
                 .map { BundleFileHash("sha256", it.fileName.toString()) }
                 .toList()
         }

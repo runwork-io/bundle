@@ -38,8 +38,8 @@ class ContentAddressableStoreTest {
         val hash = store.store(tempFile)
 
         // Verify it's a valid SHA-256 hash with prefix
-        assertEquals("sha256", hash.type)
-        assertEquals(64, hash.value.length) // 64 hex chars
+        assertEquals("sha256", hash.algorithm)
+        assertEquals(64, hash.hex.length) // 64 hex chars
 
         // Verify hash is correct
         val expectedHash = TestFixtures.computeHash(content.toByteArray())
