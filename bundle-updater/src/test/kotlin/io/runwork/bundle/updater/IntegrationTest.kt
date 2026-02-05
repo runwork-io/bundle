@@ -276,7 +276,7 @@ class IntegrationTest {
         assertTrue(signedManifest.signature.startsWith("ed25519:"))
 
         // Step 5: Verify output structure
-        val bundleZipName = platformBundles["macos-arm64"]!!.bundleZip
+        val bundleZipName = platformBundles["macos-arm64"]!!.zip
         assertTrue(Files.exists(outputDir.resolve(bundleZipName)), "Bundle zip should exist: $bundleZipName")
         assertTrue(Files.isDirectory(outputDir.resolve("files")))
 

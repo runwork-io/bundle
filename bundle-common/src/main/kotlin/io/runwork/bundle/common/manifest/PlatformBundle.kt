@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class PlatformBundle(
     /** Relative path to the bundle zip (e.g., "bundle-macos-arm64.zip") */
-    val bundleZip: String,
+    val zip: String,
 
     /** Size of the platform bundle zip in bytes (used for download strategy decisions and progress reporting) */
     val size: Long,

@@ -58,7 +58,7 @@ object TestFixtures {
         val size = files.sumOf { it.size }
         val platformBundles = platforms.associateWith { platformId ->
             PlatformBundle(
-                bundleZip = "bundle-$platformId.zip",
+                zip = "bundle-$platformId.zip",
                 size = size,
             )
         }

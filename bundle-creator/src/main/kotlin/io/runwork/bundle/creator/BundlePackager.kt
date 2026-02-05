@@ -74,7 +74,7 @@ class BundlePackager(
 
             // Point all platforms in the group to this zip with actual zip size
             val platformBundle = PlatformBundle(
-                bundleZip = zipFileName,
+                zip = zipFileName,
                 size = bundleZip.length(),
             )
             for (platformId in platforms) {

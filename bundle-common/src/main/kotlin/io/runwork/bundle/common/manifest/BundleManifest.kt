@@ -70,11 +70,11 @@ data class BundleManifest(
     }
 
     /**
-     * Get the bundle zip path for a specific platform.
+     * Get the zip path for a specific platform.
      *
      * Returns null if the platform is not supported.
      */
-    fun bundleZipForPlatform(platform: Platform): String? {
-        return platformBundles[platform.toString()]?.bundleZip
+    fun zipForPlatform(platform: Platform): String? {
+        return platformBundles[platform.toString()]?.zip
     }
 }

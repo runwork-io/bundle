@@ -260,7 +260,7 @@ abstract class BundleCreatorTask : DefaultTask() {
             val zipFileName = platformBundleZips[platformId]!!
             val zipFile = File(outputDir, zipFileName)
             PlatformBundle(
-                bundleZip = zipFileName,
+                zip = zipFileName,
                 size = zipFile.length(),
             )
         }

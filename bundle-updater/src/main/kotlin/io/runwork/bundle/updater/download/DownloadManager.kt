@@ -183,7 +183,7 @@ class DownloadManager(
 
         return try {
             // Get platform-specific bundle URL
-            val bundleZipPath = manifest.bundleZipForPlatform(platform)
+            val bundleZipPath = manifest.zipForPlatform(platform)
                 ?: throw DownloadException("No bundle zip available for platform: $platform")
 
             // Resolve relative URL from manifest location

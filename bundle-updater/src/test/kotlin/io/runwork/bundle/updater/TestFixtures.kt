@@ -67,7 +67,7 @@ object TestFixtures {
         val size = files.sumOf { it.size }
         val platformBundles = platforms.associateWith { platformId ->
             PlatformBundle(
-                bundleZip = "bundle-$platformId.zip",
+                zip = "bundle-$platformId.zip",
                 size = size,
             )
         }
@@ -208,7 +208,7 @@ object TestFixtures {
         // Optionally create platform-specific bundle zips
         if (includeZip) {
             for ((platformId, platformBundle) in manifest.platformBundles) {
-                val zipPath = baseDir.resolve(platformBundle.bundleZip)
+                val zipPath = baseDir.resolve(platformBundle.zip)
                 createBundleZip(zipPath, manifest, files)
             }
         }
