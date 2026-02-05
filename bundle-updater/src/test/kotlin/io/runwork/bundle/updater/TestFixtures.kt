@@ -229,12 +229,13 @@ object TestFixtures {
         files: Map<BundleFileHash, ByteArray>
     ) {
         // Stream directly to the ZIP file instead of buffering in memory
+        // Deduplicate by hash so identical content is stored once in the zip
         Files.newOutputStream(zipPath).use { fos ->
             ZipOutputStream(fos).use { zos ->
-                for (bundleFile in manifest.files) {
+                for (bundleFile in manifest.files.distinctBy { it.hash }) {
                     val content = files[bundleFile.hash]
                     if (content != null) {
-                        zos.putNextEntry(ZipEntry(bundleFile.path))
+                        zos.putNextEntry(ZipEntry(bundleFile.hash.hex))
                         zos.write(content)
                         zos.closeEntry()
                     }

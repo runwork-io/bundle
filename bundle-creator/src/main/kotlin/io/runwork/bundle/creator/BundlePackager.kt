@@ -67,9 +67,9 @@ class BundlePackager(
             val platform = Platform.fromString(platforms.first())
             val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
 
-            // Create the zip once
-            val files = platformFiles.map { bf ->
-                bf.path to File(inputDir, bf.path)
+            // Create the zip once (deduplicate by hash so identical content is stored once)
+            val files = platformFiles.distinctBy { it.hash }.map { bf ->
+                bf.hash.hex to File(inputDir, bf.path)
             }
             createZip(bundleZip, files)
 

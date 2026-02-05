@@ -1,6 +1,7 @@
 package io.runwork.bundle.updater.download
 
 import io.runwork.bundle.common.Platform
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.updater.result.DownloadException
@@ -384,16 +385,17 @@ class DownloadManager(
         zipPath: Path,
         manifest: BundleManifest
     ) {
-        // Create a map of path -> expected hash for files applicable to this platform
+        // Build a set of expected hash hexes for files applicable to this platform
         val platformFiles = manifest.filesForPlatform(platform)
-        val expectedHashes = platformFiles.associate { it.path to it.hash }
+        val expectedHashHexes = platformFiles.map { it.hash.hex }.toSet()
 
         ZipInputStream(Files.newInputStream(zipPath)).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory) {
-                    val expectedHash = expectedHashes[entry.name]
-                    if (expectedHash != null) {
+                    val hashHex = entry.name
+                    if (hashHex in expectedHashHexes) {
+                        val expectedHash = BundleFileHash("sha256", hashHex)
                         // Write to temp file
                         val tempFile = storageManager.createTempFile("extract")
                         try {

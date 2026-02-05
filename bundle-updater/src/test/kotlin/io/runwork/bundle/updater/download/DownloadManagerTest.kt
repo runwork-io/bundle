@@ -313,8 +313,8 @@ class DownloadManagerTest {
             buildNumber = 42
         )
 
-        // Create a ZIP with the files
-        val zipBytes = createTestZip(listOf("file1.txt" to fileContent))
+        // Create a ZIP with the files (entry names are hash hex)
+        val zipBytes = createTestZip(listOf(fileHash.hex to fileContent))
 
         mockServer.enqueue(
             MockResponse()

@@ -440,14 +440,15 @@ class IntegrationTest {
 
     /**
      * Create a bundle.zip in memory for MockWebServer.
+     * Entry names are hash hex (matching the production zip format).
      */
     private fun createBundleZip(files: List<BundleFile>, contents: Map<String, ByteArray>): Buffer {
         val buffer = Buffer()
         ZipOutputStream(buffer.outputStream()).use { zip ->
-            for (file in files) {
+            for (file in files.distinctBy { it.hash }) {
                 val content = contents[file.path]
                     ?: throw IllegalArgumentException("Missing content for ${file.path}")
-                zip.putNextEntry(ZipEntry(file.path))
+                zip.putNextEntry(ZipEntry(file.hash.hex))
                 zip.write(content)
                 zip.closeEntry()
             }
