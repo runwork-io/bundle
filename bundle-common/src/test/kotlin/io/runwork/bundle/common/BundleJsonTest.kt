@@ -53,27 +53,27 @@ class BundleJsonTest {
     }
 
     @Test
-    fun encodeManifestWithDefaults_omitsNullAndDefaultFields() {
+    fun encodeManifestWithDefaults_omitsNullFields() {
         val manifest = BundleManifest(
             schemaVersion = 1,
             buildNumber = 1,
             createdAt = "2025-01-01T00:00:00Z",
             minShellVersion = 1,
-            shellUpdateUrl = null, // default → omitted
+            shellUpdateUrl = null, // null → omitted by explicitNulls = false
             files = listOf(
                 BundleFile(
                     path = "app.jar",
                     hash = "sha256:cccc",
                     size = 512,
-                    os = null,  // default → omitted
-                    arch = null, // default → omitted
+                    os = null,  // null → omitted by explicitNulls = false
+                    arch = null, // null → omitted by explicitNulls = false
                 ),
             ),
             mainClass = "io.runwork.TestMain",
             platformBundles = mapOf(
                 "macos-arm64" to PlatformBundle(zip = "bundle-macos-arm64.zip", size = 512),
             ),
-            signature = "", // default → omitted
+            signature = "", // default → omitted by encodeDefaults = false
         )
 
         val expected = """{"schemaVersion":1,"buildNumber":1,"createdAt":"2025-01-01T00:00:00Z","minShellVersion":1,"files":[{"path":"app.jar","hash":"sha256:cccc","size":512}],"mainClass":"io.runwork.TestMain","platformBundles":{"macos-arm64":{"zip":"bundle-macos-arm64.zip","size":512}}}"""

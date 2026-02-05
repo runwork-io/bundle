@@ -17,15 +17,16 @@ object BundleJson {
      *
      * Configuration rationale:
      * - [encodeDefaults] = false  — omits fields that equal their default value
-     *   (e.g. `signature = ""`, `shellUpdateUrl = null`), matching the format
-     *   that has been in production since launch.
+     *   (e.g. `signature = ""`, `shellUpdateUrl = null`), keeping the signed
+     *   form compact and matching the format used since launch.
      * - [prettyPrint] = false — compact single-line output (the signed form).
-     * - [explicitNulls] = true — if a nullable field is explicitly set to `null`
-     *   **and** that is not its default, it will appear in the output.
+     * - [explicitNulls] = false — nullable fields whose value is `null` are
+     *   omitted rather than encoded as `"field": null`, keeping the output
+     *   compact and avoiding unnecessary noise in the signed payload.
      */
     val signingJson: Json = Json {
         encodeDefaults = false
         prettyPrint = false
-        explicitNulls = true
+        explicitNulls = false
     }
 }
