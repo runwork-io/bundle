@@ -128,7 +128,7 @@ class BundleManifestSignerTest {
         assertEquals(manifest.minShellVersion, signedManifest.minShellVersion)
         assertEquals(manifest.files, signedManifest.files)
         assertEquals(manifest.mainClass, signedManifest.mainClass)
-        assertEquals(manifest.totalSizeForPlatform(testPlatform), signedManifest.totalSizeForPlatform(testPlatform))
+        assertEquals(manifest.sizeForPlatform(testPlatform), signedManifest.sizeForPlatform(testPlatform))
         assertEquals(manifest.bundleZipForPlatform(testPlatform), signedManifest.bundleZipForPlatform(testPlatform))
         // Only signature should be different
         assertNotEquals(manifest.signature, signedManifest.signature)

@@ -255,14 +255,13 @@ abstract class BundleCreatorTask : DefaultTask() {
             logger.lifecycle("  Created $zipFileName (${platformFiles.size} files) for: ${platforms.joinToString(", ")}")
         }
 
-        // Build platform bundles map with total sizes
+        // Build platform bundles map with actual zip file sizes
         val platformBundlesMap = targetPlatforms.associateWith { platformId ->
-            val platform = Platform.fromString(platformId)
-            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
-            val totalSize = platformFiles.sumOf { it.size }
+            val zipFileName = platformBundleZips[platformId]!!
+            val zipFile = File(outputDir, zipFileName)
             PlatformBundle(
-                bundleZip = platformBundleZips[platformId]!!,
-                totalSize = totalSize,
+                bundleZip = zipFileName,
+                size = zipFile.length(),
             )
         }
 
@@ -296,8 +295,8 @@ abstract class BundleCreatorTask : DefaultTask() {
         // List unique zip files
         val uniqueZips = platformBundleZips.entries.groupBy({ it.value }, { it.key })
         for ((zipName, platformsForZip) in uniqueZips) {
-            val totalSize = platformBundlesMap[platformsForZip.first()]!!.totalSize
-            val sizeMb = totalSize / 1024 / 1024
+            val size = platformBundlesMap[platformsForZip.first()]!!.size
+            val sizeMb = size / 1024 / 1024
             logger.lifecycle("  $zipName - $sizeMb MB (${platformsForZip.joinToString(", ")})")
         }
         logger.lifecycle("  files/ - Individual files by hash (for incremental updates)")

@@ -45,13 +45,13 @@ class BundlePackagerTest {
         val result = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
 
         // All platforms should point to the same zip file
-        val uniqueZips = result.values.toSet()
+        val uniqueZips = result.values.map { it.bundleZip }.toSet()
         assertEquals(1, uniqueZips.size, "All platforms with same content should share one zip")
 
         // Verify all platforms map to the same zip
         val sharedZip = uniqueZips.first()
         for (platform in targetPlatforms) {
-            assertEquals(sharedZip, result[platform])
+            assertEquals(sharedZip, result[platform]!!.bundleZip)
         }
 
         // Verify the zip file exists
@@ -81,14 +81,14 @@ class BundlePackagerTest {
 
         // macos-arm64 should have its own zip (has native dylib)
         // Other platforms should share a zip (universal only)
-        val uniqueZips = result.values.toSet()
+        val uniqueZips = result.values.map { it.bundleZip }.toSet()
         assertEquals(2, uniqueZips.size, "Should have 2 unique zips")
 
         // Verify macos-arm64 has different zip than others
-        val macosArm64Zip = result["macos-arm64"]
-        val macosX64Zip = result["macos-x64"]
-        val windowsZip = result["windows-x64"]
-        val linuxZip = result["linux-x64"]
+        val macosArm64Zip = result["macos-arm64"]!!.bundleZip
+        val macosX64Zip = result["macos-x64"]!!.bundleZip
+        val windowsZip = result["windows-x64"]!!.bundleZip
+        val linuxZip = result["linux-x64"]!!.bundleZip
 
         assertTrue(macosArm64Zip != macosX64Zip, "macos-arm64 should have different zip than macos-x64")
         assertEquals(macosX64Zip, windowsZip, "macos-x64 and windows-x64 should share same zip")
@@ -113,7 +113,7 @@ class BundlePackagerTest {
         val result = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
 
         // Zip filename should be content-addressable (8-char fingerprint)
-        val zipName = result["macos-arm64"]!!
+        val zipName = result["macos-arm64"]!!.bundleZip
         assertTrue(zipName.startsWith("bundle-"), "Zip name should start with 'bundle-'")
         assertTrue(zipName.endsWith(".zip"), "Zip name should end with '.zip'")
 

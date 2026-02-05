@@ -412,7 +412,7 @@ class BootstrapTest {
             platformBundles = mapOf(
                 platform to PlatformBundle(
                     bundleZip = "bundle-$platform.zip",
-                    totalSize = files.sumOf { it.size }
+                    size = files.sumOf { it.size }
                 )
             ),
             signature = ""

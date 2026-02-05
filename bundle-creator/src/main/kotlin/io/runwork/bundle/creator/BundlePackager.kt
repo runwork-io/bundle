@@ -2,6 +2,7 @@ package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.PlatformBundle
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -28,14 +29,14 @@ class BundlePackager(
      * @param outputDir Directory to write output files
      * @param bundleFiles List of BundleFile entries with hashes and platform constraints
      * @param targetPlatforms List of target platform IDs (e.g., ["macos-arm64", "windows-x64"])
-     * @return Map of platform ID to bundle zip filename (e.g., "bundle-a1b2c3d4.zip")
+     * @return Map of platform ID to PlatformBundle (with zip filename and actual zip file size)
      */
     fun packageBundle(
         inputDir: File,
         outputDir: File,
         bundleFiles: List<BundleFile>,
         targetPlatforms: List<String>,
-    ): Map<String, String> {
+    ): Map<String, PlatformBundle> {
         outputDir.mkdirs()
 
         // Create files/ directory with content-addressable names (all files)
@@ -54,7 +55,7 @@ class BundlePackager(
 
         // Group platforms by content fingerprint to deduplicate identical zips
         val platformGroups = manifestBuilder.groupPlatformsByContent(bundleFiles, targetPlatforms)
-        val platformBundleZips = mutableMapOf<String, String>()
+        val platformBundles = mutableMapOf<String, PlatformBundle>()
 
         for ((fingerprint, platforms) in platformGroups) {
             // Content-addressable zip filename
@@ -71,13 +72,17 @@ class BundlePackager(
             }
             createZip(bundleZip, files)
 
-            // Point all platforms in the group to this zip
+            // Point all platforms in the group to this zip with actual zip size
+            val platformBundle = PlatformBundle(
+                bundleZip = zipFileName,
+                size = bundleZip.length(),
+            )
             for (platformId in platforms) {
-                platformBundleZips[platformId] = zipFileName
+                platformBundles[platformId] = platformBundle
             }
         }
 
-        return platformBundleZips
+        return platformBundles
     }
 
     /**

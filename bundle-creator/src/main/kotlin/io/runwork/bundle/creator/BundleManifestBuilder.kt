@@ -34,7 +34,7 @@ class BundleManifestBuilder {
      * @param buildNumber Build number for the manifest
      * @param mainClass Fully qualified main class name
      * @param minShellVersion Minimum shell version required
-     * @param platformBundleHashes Map of platform ID to bundle zip info (bundleZip path)
+     * @param platformBundles Map of platform ID to PlatformBundle (from BundlePackager output)
      * @param shellUpdateUrl Optional URL for shell updates
      * @return Unsigned manifest (signature field is empty)
      */
@@ -44,23 +44,10 @@ class BundleManifestBuilder {
         buildNumber: Long,
         mainClass: String,
         minShellVersion: Int,
-        platformBundleHashes: Map<String, String>,
+        platformBundles: Map<String, PlatformBundle>,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
         val bundleFiles = collectFilesWithPlatformConstraints(inputDir)
-
-        // Calculate total size per platform
-        val platformBundles = targetPlatforms.associateWith { platformId ->
-            val platform = Platform.fromString(platformId)
-            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
-            val totalSize = platformFiles.sumOf { it.size }
-            val bundleZip = platformBundleHashes[platformId]
-                ?: throw IllegalArgumentException("Missing bundle zip path for platform: $platformId")
-            PlatformBundle(
-                bundleZip = bundleZip,
-                totalSize = totalSize,
-            )
-        }
 
         return BundleManifest(
             schemaVersion = 1,

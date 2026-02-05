@@ -61,12 +61,12 @@ data class BundleManifest(
     }
 
     /**
-     * Get the total size of files for a specific platform.
+     * Get the size of the bundle zip for a specific platform.
      *
      * Returns null if the platform is not supported.
      */
-    fun totalSizeForPlatform(platform: Platform): Long? {
-        return platformBundles[platform.toString()]?.totalSize
+    fun sizeForPlatform(platform: Platform): Long? {
+        return platformBundles[platform.toString()]?.size
     }
 
     /**

@@ -46,11 +46,11 @@ suspend fun createBundle() {
     println("Collected ${bundleFiles.size} files")
 
     // Step 3: Package bundles (creates per-platform bundle-{platform}.zip and files/ directory)
-    // Returns a map of platform ID to bundle zip filename
-    val platformBundleZips = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
+    // Returns a map of platform ID to PlatformBundle (with zip filename and actual zip size)
+    val platformBundles = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
     println("Bundles packaged:")
-    platformBundleZips.forEach { (platform, zipFile) ->
-        println("  $platform -> $zipFile")
+    platformBundles.forEach { (platform, bundle) ->
+        println("  $platform -> ${bundle.bundleZip} (${bundle.size} bytes)")
     }
 
     // Step 4: Build unsigned manifest
@@ -60,7 +60,7 @@ suspend fun createBundle() {
         buildNumber = System.currentTimeMillis(), // Or from CI build number
         mainClass = "com.myapp.MainKt",
         minShellVersion = 1,
-        platformBundleHashes = platformBundleZips,
+        platformBundles = platformBundles,
         shellUpdateUrl = null, // Optional: URL to update the shell app itself
     )
 
@@ -77,7 +77,7 @@ suspend fun createBundle() {
     println("  Platforms: ${signedManifest.platformBundles.keys.joinToString(", ")}")
     println("  Files: ${signedManifest.files.size}")
     signedManifest.platformBundles.forEach { (platform, bundle) ->
-        println("  $platform: ${bundle.totalSize} bytes (${bundle.bundleZip})")
+        println("  $platform: ${bundle.size} bytes (${bundle.bundleZip})")
     }
     println("  Output: $outputDir")
 }
@@ -107,14 +107,14 @@ fun generateKeys() {
  *     └── ...
  *
  * The manifest.json contains platform-specific bundle information:
- * - platformBundles: Map of platform ID to {bundleZip, totalSize}
+ * - platformBundles: Map of platform ID to {bundleZip, size}
  * - files: List of all files with optional os/arch constraints
  *
  * Example manifest structure:
  * {
  *   "platformBundles": {
- *     "macos-arm64": { "bundleZip": "bundle-macos-arm64.zip", "totalSize": 12345678 },
- *     "windows-x64": { "bundleZip": "bundle-windows-x64.zip", "totalSize": 12345678 }
+ *     "macos-arm64": { "bundleZip": "bundle-macos-arm64.zip", "size": 12345678 },
+ *     "windows-x64": { "bundleZip": "bundle-windows-x64.zip", "size": 12345678 }
  *   },
  *   "files": [
  *     { "path": "lib/app.jar", "hash": "sha256:...", "size": 1234 },

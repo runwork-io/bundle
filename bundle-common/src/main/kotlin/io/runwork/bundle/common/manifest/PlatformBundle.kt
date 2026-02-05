@@ -10,6 +10,6 @@ data class PlatformBundle(
     /** Relative path to the bundle zip (e.g., "bundle-macos-arm64.zip") */
     val bundleZip: String,
 
-    /** Total size of files for this platform in bytes (used for download strategy decisions) */
-    val totalSize: Long,
+    /** Size of the platform bundle zip in bytes (used for download strategy decisions and progress reporting) */
+    val size: Long,
 )

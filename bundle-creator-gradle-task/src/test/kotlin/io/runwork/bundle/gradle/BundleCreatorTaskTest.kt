@@ -373,7 +373,10 @@ class BundleCreatorTaskTest {
         val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
         val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
 
-        assertEquals(300L, manifest.totalSizeForPlatform(Platform.fromString("macos-arm64")))
+        // totalSize should equal the actual zip file size on disk, not the sum of file sizes
+        val bundleZipName = manifest.platformBundles["macos-arm64"]!!.bundleZip
+        val bundleZipFile = testProjectDir.resolve("build/bundle/$bundleZipName").toFile()
+        assertEquals(bundleZipFile.length(), manifest.sizeForPlatform(Platform.fromString("macos-arm64")))
     }
 
     @Test

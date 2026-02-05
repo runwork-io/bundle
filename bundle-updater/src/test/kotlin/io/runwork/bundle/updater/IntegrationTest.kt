@@ -257,9 +257,9 @@ class IntegrationTest {
         assertEquals(4, bundleFiles.size)
 
         // Step 2: Package bundles for each platform
-        val platformBundleZips = packager.packageBundle(inputDir.toFile(), outputDir.toFile(), bundleFiles, targetPlatforms)
-        assertEquals(1, platformBundleZips.size)
-        assertTrue(platformBundleZips.containsKey("macos-arm64"))
+        val platformBundles = packager.packageBundle(inputDir.toFile(), outputDir.toFile(), bundleFiles, targetPlatforms)
+        assertEquals(1, platformBundles.size)
+        assertTrue(platformBundles.containsKey("macos-arm64"))
 
         // Step 3: Build manifest
         val manifest = builder.build(
@@ -268,7 +268,7 @@ class IntegrationTest {
             buildNumber = 12345,
             mainClass = "com.example.MainKt",
             minShellVersion = 1,
-            platformBundleHashes = platformBundleZips,
+            platformBundles = platformBundles,
         )
 
         // Step 4: Sign manifest
@@ -276,7 +276,7 @@ class IntegrationTest {
         assertTrue(signedManifest.signature.startsWith("ed25519:"))
 
         // Step 5: Verify output structure
-        val bundleZipName = platformBundleZips["macos-arm64"]!!
+        val bundleZipName = platformBundles["macos-arm64"]!!.bundleZip
         assertTrue(Files.exists(outputDir.resolve(bundleZipName)), "Bundle zip should exist: $bundleZipName")
         assertTrue(Files.isDirectory(outputDir.resolve("files")))
 
