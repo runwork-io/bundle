@@ -49,9 +49,9 @@ object TestFixtures {
         shellUpdateUrl: String? = null,
     ): BundleManifest {
         val size = files.sumOf { it.size }
-        val platformBundles = platforms.associateWith { platformId ->
+        val zips = platforms.associateWith { platformId ->
             PlatformBundle(
-                zip = "bundle-$platformId.zip",
+                zip = "zips/bundle-$platformId.zip",
                 size = size,
             )
         }
@@ -64,7 +64,7 @@ object TestFixtures {
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            platformBundles = platformBundles,
+            zips = zips,
             signature = ""
         )
     }

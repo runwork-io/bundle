@@ -58,7 +58,7 @@ class BundlePackagerTest {
         assertTrue(File(outputDir, sharedZip).exists())
 
         // Verify only one zip file was created (not 4)
-        val zipFiles = outputDir.listFiles()?.filter { it.name.endsWith(".zip") } ?: listOf()
+        val zipFiles = File(outputDir, "zips").listFiles()?.filter { it.name.endsWith(".zip") } ?: listOf()
         assertEquals(1, zipFiles.size)
     }
 
@@ -95,7 +95,7 @@ class BundlePackagerTest {
         assertEquals(windowsZip, linuxZip, "windows-x64 and linux-x64 should share same zip")
 
         // Verify 2 zip files were created
-        val zipFiles = outputDir.listFiles()?.filter { it.name.endsWith(".zip") } ?: listOf()
+        val zipFiles = File(outputDir, "zips").listFiles()?.filter { it.name.endsWith(".zip") } ?: listOf()
         assertEquals(2, zipFiles.size)
     }
 
@@ -114,11 +114,11 @@ class BundlePackagerTest {
 
         // Zip filename should be content-addressable (8-char fingerprint)
         val zipName = result["macos-arm64"]!!.zip
-        assertTrue(zipName.startsWith("bundle-"), "Zip name should start with 'bundle-'")
+        assertTrue(zipName.startsWith("zips/bundle-"), "Zip name should start with 'zips/bundle-'")
         assertTrue(zipName.endsWith(".zip"), "Zip name should end with '.zip'")
 
         // Extract fingerprint part
-        val fingerprint = zipName.removePrefix("bundle-").removeSuffix(".zip")
+        val fingerprint = zipName.removePrefix("zips/bundle-").removeSuffix(".zip")
         assertEquals(8, fingerprint.length, "Content fingerprint should be 8 characters")
 
         // Fingerprint should be hex (lowercase)
