@@ -2,12 +2,12 @@ package io.runwork.bundle.updater
 
 import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okio.ByteString.Companion.toByteString
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.KeyFactory
@@ -142,14 +142,14 @@ object TestFixtures {
     /**
      * Compute SHA-256 hash of content using Okio.
      */
-    fun computeHash(content: ByteArray): String {
-        return "sha256:" + content.toByteString().sha256().hex()
+    fun computeHash(content: ByteArray): BundleFileHash {
+        return HashVerifier.computeHash(content)
     }
 
     /**
      * Compute SHA-256 hash of a file using Okio (streaming, memory-efficient).
      */
-    suspend fun computeHash(path: Path): String {
+    suspend fun computeHash(path: Path): BundleFileHash {
         return HashVerifier.computeHash(path)
     }
 
@@ -175,20 +175,20 @@ object TestFixtures {
      *   manifest.json           # Bundle manifest JSON
      *   bundle-{platform}.zip   # Per-platform bundle ZIPs (optional)
      *   files/
-     *     <hash1>               # Individual files by hash (no sha256: prefix)
+     *     <hash1>               # Individual files by hash hex
      *     <hash2>
      * ```
      *
      * @param baseDir The directory to create the bundle server in
      * @param manifest The bundle manifest to write
-     * @param files Map of hash (with sha256: prefix) to file contents
+     * @param files Map of hash to file contents
      * @param includeZip If true, also creates platform-specific bundle.zip files
      * @return file:// URL pointing to the bundle server
      */
     fun createFileBundleServer(
         baseDir: Path,
         manifest: BundleManifest,
-        files: Map<String, ByteArray>,
+        files: Map<BundleFileHash, ByteArray>,
         includeZip: Boolean = false
     ): String {
         // Create directories
@@ -199,9 +199,9 @@ object TestFixtures {
         val manifestPath = baseDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
 
-        // Write individual files by hash (without sha256: prefix)
+        // Write individual files by hash hex
         for ((hash, content) in files) {
-            val hashWithoutPrefix = hash.removePrefix("sha256:")
+            val hashWithoutPrefix = hash.hex
             val filePath = filesDir.resolve(hashWithoutPrefix)
             Files.write(filePath, content)
         }
@@ -226,7 +226,7 @@ object TestFixtures {
     private fun createBundleZip(
         zipPath: Path,
         manifest: BundleManifest,
-        files: Map<String, ByteArray>
+        files: Map<BundleFileHash, ByteArray>
     ) {
         // Stream directly to the ZIP file instead of buffering in memory
         Files.newOutputStream(zipPath).use { fos ->

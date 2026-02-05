@@ -3,6 +3,7 @@ package io.runwork.bundle.creator
 import io.runwork.bundle.common.Arch
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -151,8 +152,8 @@ class BundleManifestBuilderTest {
     @Test
     fun `computeContentFingerprint returns same fingerprint for same files`() {
         val files = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
-            BundleFile("lib/util.jar", "sha256:def456", 500, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
+            BundleFile("lib/util.jar", BundleFileHash.parse("sha256:def456"), 500, null, null),
         )
 
         val fingerprint1 = builder.computeContentFingerprint(files)
@@ -165,12 +166,12 @@ class BundleManifestBuilderTest {
     @Test
     fun `computeContentFingerprint returns same fingerprint regardless of file order`() {
         val files1 = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
-            BundleFile("lib/util.jar", "sha256:def456", 500, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
+            BundleFile("lib/util.jar", BundleFileHash.parse("sha256:def456"), 500, null, null),
         )
         val files2 = listOf(
-            BundleFile("lib/util.jar", "sha256:def456", 500, null, null),
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
+            BundleFile("lib/util.jar", BundleFileHash.parse("sha256:def456"), 500, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
         )
 
         val fingerprint1 = builder.computeContentFingerprint(files1)
@@ -182,10 +183,10 @@ class BundleManifestBuilderTest {
     @Test
     fun `computeContentFingerprint returns different fingerprint for different files`() {
         val files1 = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
         )
         val files2 = listOf(
-            BundleFile("lib/app.jar", "sha256:xyz789", 1000, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:xyz789"), 1000, null, null),
         )
 
         val fingerprint1 = builder.computeContentFingerprint(files1)
@@ -198,7 +199,7 @@ class BundleManifestBuilderTest {
     fun `groupPlatformsByContent groups platforms with identical files`() {
         // Universal file only - all platforms should have the same content
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
         )
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
 
@@ -213,8 +214,8 @@ class BundleManifestBuilderTest {
     fun `groupPlatformsByContent separates platforms with different files`() {
         // macOS-arm64 gets a unique native lib, others get universal only
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
-            BundleFile("resources/macos-arm64/native.dylib", "sha256:native123", 5000, Os.MACOS, Arch.ARM64),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
+            BundleFile("resources/macos-arm64/native.dylib", BundleFileHash.parse("sha256:native123"), 5000, Os.MACOS, Arch.ARM64),
         )
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
 
@@ -237,8 +238,8 @@ class BundleManifestBuilderTest {
     fun `groupPlatformsByContent handles OS-specific files`() {
         // macOS-specific file (applies to both arm64 and x64)
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
-            BundleFile("resources/macos/config.plist", "sha256:macos123", 500, Os.MACOS, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
+            BundleFile("resources/macos/config.plist", BundleFileHash.parse("sha256:macos123"), 500, Os.MACOS, null),
         )
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
 
@@ -266,10 +267,10 @@ class BundleManifestBuilderTest {
         // - macOS x64 only: native-x64.dylib
         // - Windows (both archs): windows.dll
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 1000, null, null),
-            BundleFile("resources/macos-arm64/native.dylib", "sha256:arm64dylib", 5000, Os.MACOS, Arch.ARM64),
-            BundleFile("resources/macos-x64/native.dylib", "sha256:x64dylib", 5000, Os.MACOS, Arch.X64),
-            BundleFile("resources/windows/native.dll", "sha256:windowsdll", 5000, Os.WINDOWS, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 1000, null, null),
+            BundleFile("resources/macos-arm64/native.dylib", BundleFileHash.parse("sha256:arm64dylib"), 5000, Os.MACOS, Arch.ARM64),
+            BundleFile("resources/macos-x64/native.dylib", BundleFileHash.parse("sha256:x64dylib"), 5000, Os.MACOS, Arch.X64),
+            BundleFile("resources/windows/native.dll", BundleFileHash.parse("sha256:windowsdll"), 5000, Os.WINDOWS, null),
         )
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-arm64", "windows-x64", "linux-x64")
 

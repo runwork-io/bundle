@@ -1,10 +1,10 @@
 package io.runwork.bundle.common
 
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
-import okio.ByteString.Companion.toByteString
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -98,14 +98,14 @@ object TestFixtures {
     /**
      * Compute SHA-256 hash of content using Okio.
      */
-    fun computeHash(content: ByteArray): String {
-        return "sha256:" + content.toByteString().sha256().hex()
+    fun computeHash(content: ByteArray): BundleFileHash {
+        return HashVerifier.computeHash(content)
     }
 
     /**
      * Compute SHA-256 hash of a file using Okio (streaming, memory-efficient).
      */
-    suspend fun computeHash(path: Path): String {
+    suspend fun computeHash(path: Path): BundleFileHash {
         return HashVerifier.computeHash(path)
     }
 

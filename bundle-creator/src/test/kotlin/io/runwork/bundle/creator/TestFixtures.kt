@@ -1,6 +1,7 @@
 package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
@@ -113,14 +114,14 @@ object TestFixtures {
     /**
      * Compute SHA-256 hash of content.
      */
-    fun computeHash(content: ByteArray): String {
+    fun computeHash(content: ByteArray): BundleFileHash {
         return HashVerifier.computeHash(content)
     }
 
     /**
      * Compute SHA-256 hash of a file using Okio (streaming, memory-efficient).
      */
-    suspend fun computeHash(path: Path): String {
+    suspend fun computeHash(path: Path): BundleFileHash {
         return HashVerifier.computeHash(path)
     }
 

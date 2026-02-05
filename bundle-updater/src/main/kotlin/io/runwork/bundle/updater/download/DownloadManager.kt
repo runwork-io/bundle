@@ -255,7 +255,7 @@ class DownloadManager(
             val tempFile = storageManager.createTempFile("file")
 
             try {
-                val hash = file.hash.removePrefix("sha256:")
+                val hash = file.hash.hex
                 val baseDownloaded = totalDownloaded
                 downloadFile(
                     url = "$baseUrl/files/$hash",

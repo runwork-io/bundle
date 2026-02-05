@@ -1,6 +1,7 @@
 package io.runwork.bundle.common.verification
 
 import io.runwork.bundle.common.TestFixtures
+import io.runwork.bundle.common.manifest.BundleFileHash
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -33,7 +34,7 @@ class HashVerifierTest {
         val hash = HashVerifier.computeHash(file)
 
         // SHA-256 of "Hello, World!" is well-known
-        assertEquals("sha256:dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", hash)
+        assertEquals(BundleFileHash("sha256", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"), hash)
     }
 
     @Test
@@ -42,7 +43,7 @@ class HashVerifierTest {
 
         val hash = HashVerifier.computeHash(content)
 
-        assertEquals("sha256:dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", hash)
+        assertEquals(BundleFileHash("sha256", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"), hash)
     }
 
     @Test
@@ -61,9 +62,9 @@ class HashVerifierTest {
         val content = "Test content"
         val file = TestFixtures.createTestFile(tempDir, "verify.txt", content)
         val expectedHash = HashVerifier.computeHash(file)
-        val hashWithoutPrefix = expectedHash.removePrefix("sha256:")
+        val reparsed = BundleFileHash.parse(expectedHash.toString())
 
-        val result = HashVerifier.verify(file, hashWithoutPrefix)
+        val result = HashVerifier.verify(file, reparsed)
 
         assertTrue(result)
     }
@@ -71,7 +72,7 @@ class HashVerifierTest {
     @Test
     fun verify_returnsFalseForMismatchedHash() = runTest {
         val file = TestFixtures.createTestFile(tempDir, "verify.txt", "Original content")
-        val wrongHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val wrongHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         val result = HashVerifier.verify(file, wrongHash)
 
@@ -81,7 +82,7 @@ class HashVerifierTest {
     @Test
     fun verify_returnsFalseForMissingFile() = runTest {
         val nonExistentFile = tempDir.resolve("does-not-exist.txt")
-        val someHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val someHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         val result = HashVerifier.verify(nonExistentFile, someHash)
 
@@ -112,6 +113,6 @@ class HashVerifierTest {
         val hash = HashVerifier.computeHash(file)
 
         // SHA-256 of empty content is well-known
-        assertEquals("sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash)
+        assertEquals(BundleFileHash("sha256", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), hash)
     }
 }

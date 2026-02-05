@@ -3,6 +3,7 @@ package io.runwork.bundle.common.verification
 import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.TestFixtures
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -80,7 +81,7 @@ class SignatureVerifierTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             )
@@ -100,7 +101,7 @@ class SignatureVerifierTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             )
@@ -119,7 +120,7 @@ class SignatureVerifierTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             )
@@ -147,7 +148,7 @@ class SignatureVerifierTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             )
@@ -175,7 +176,7 @@ class SignatureVerifierTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             ),

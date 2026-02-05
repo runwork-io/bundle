@@ -3,6 +3,7 @@ package io.runwork.bundle.updater.storage
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.VerificationFailure
@@ -237,7 +238,7 @@ class StorageManager(
     /**
      * Get the size of a CAS file.
      */
-    suspend fun getCasFileSize(hash: String): Long = withContext(Dispatchers.IO) {
+    suspend fun getCasFileSize(hash: BundleFileHash): Long = withContext(Dispatchers.IO) {
         val path = contentStore.getPath(hash) ?: return@withContext 0L
         try {
             Files.size(path)

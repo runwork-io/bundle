@@ -1,6 +1,7 @@
 package io.runwork.bundle.common
 
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import kotlinx.serialization.encodeToString
@@ -26,12 +27,12 @@ class BundleJsonTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:aaaa",
+                    hash = BundleFileHash("sha256", "aaaa"),
                     size = 1024,
                 ),
                 BundleFile(
                     path = "natives/libfoo.dylib",
-                    hash = "sha256:bbbb",
+                    hash = BundleFileHash("sha256", "bbbb"),
                     size = 2048,
                     os = Os.MACOS,
                     arch = Arch.ARM64,
@@ -63,7 +64,7 @@ class BundleJsonTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:cccc",
+                    hash = BundleFileHash("sha256", "cccc"),
                     size = 512,
                     os = null,  // null → omitted by explicitNulls = false
                     arch = null, // null → omitted by explicitNulls = false

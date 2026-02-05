@@ -1,6 +1,7 @@
 package io.runwork.bundle.common.storage
 
 import io.runwork.bundle.common.TestFixtures
+import io.runwork.bundle.common.manifest.BundleFileHash
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -37,8 +38,8 @@ class ContentAddressableStoreTest {
         val hash = store.store(tempFile)
 
         // Verify it's a valid SHA-256 hash with prefix
-        assertTrue(hash.startsWith("sha256:"))
-        assertEquals(64 + 7, hash.length) // 64 hex chars + "sha256:"
+        assertEquals("sha256", hash.algorithm)
+        assertEquals(64, hash.hex.length) // 64 hex chars
 
         // Verify hash is correct
         val expectedHash = TestFixtures.computeHash(content.toByteArray())
@@ -72,13 +73,11 @@ class ContentAddressableStoreTest {
         val hash = store.store(tempFile)
 
         assertTrue(store.contains(hash))
-        // Also works without prefix
-        assertTrue(store.contains(hash.removePrefix("sha256:")))
     }
 
     @Test
     fun contains_returnsFalseForMissingFile() = runTest {
-        val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val unknownHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         assertFalse(store.contains(unknownHash))
     }
@@ -98,7 +97,7 @@ class ContentAddressableStoreTest {
 
     @Test
     fun getPath_returnsNullForMissingFile() = runTest {
-        val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val unknownHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         val path = store.getPath(unknownHash)
 
@@ -144,7 +143,7 @@ class ContentAddressableStoreTest {
 
     @Test
     fun delete_returnsFalseForMissingFile() = runTest {
-        val unknownHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val unknownHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         val deleted = store.delete(unknownHash)
 
@@ -197,7 +196,7 @@ class ContentAddressableStoreTest {
     @Test
     fun storeWithHash_rejectsWrongHash() = runTest {
         val content = "Content with wrong hash"
-        val wrongHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val wrongHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", content)
 
         val result = store.storeWithHash(tempFile, wrongHash)
