@@ -16,13 +16,17 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.Buffer
+import okio.FileSystem
+import okio.Path.Companion.toOkioPath
+import okio.buffer
+import okio.source
 import java.io.Closeable
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.util.zip.ZipInputStream
 import kotlin.coroutines.coroutineContext
@@ -84,7 +88,7 @@ class DownloadManager(
         }
 
         val body = try {
-            Files.readString(path)
+            FileSystem.SYSTEM.read(path.toOkioPath()) { readUtf8() }
         } catch (e: IOException) {
             throw DownloadException("Failed to read file: $path", e)
         }
@@ -315,26 +319,9 @@ class DownloadManager(
             throw DownloadException("File not found: $sourcePath")
         }
 
-        Files.newInputStream(sourcePath).use { input ->
-            Files.newOutputStream(
-                destPath,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING
-            ).use { output ->
-                val buffer = ByteArray(8192)
-                var totalBytesRead = 0L
-                var bytesRead: Int
-
-                while (input.read(buffer).also { b -> bytesRead = b } != -1) {
-                    if (!coroutineContext.isActive) {
-                        throw DownloadException("Download cancelled")
-                    }
-
-                    output.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-                    progressCallback(totalBytesRead, expectedSize)
-                }
+        FileSystem.SYSTEM.source(sourcePath.toOkioPath()).buffer().use { source ->
+            FileSystem.SYSTEM.sink(destPath.toOkioPath()).buffer().use { sink ->
+                transferWithProgress(source, sink, expectedSize, progressCallback)
             }
         }
     }
@@ -364,29 +351,32 @@ class DownloadManager(
             val body = it.body ?: throw DownloadException("Empty response for $url")
 
             withContext(Dispatchers.IO) {
-                Files.newOutputStream(
-                    destPath,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-                ).use { output ->
-                    body.byteStream().use { input ->
-                        val buffer = ByteArray(8192)
-                        var totalBytesRead = 0L
-                        var bytesRead: Int
-
-                        while (input.read(buffer).also { b -> bytesRead = b } != -1) {
-                            if (!coroutineContext.isActive) {
-                                throw DownloadException("Download cancelled")
-                            }
-
-                            output.write(buffer, 0, bytesRead)
-                            totalBytesRead += bytesRead
-                            progressCallback(totalBytesRead, expectedSize)
-                        }
+                body.source().use { source ->
+                    FileSystem.SYSTEM.sink(destPath.toOkioPath()).buffer().use { sink ->
+                        transferWithProgress(source, sink, expectedSize, progressCallback)
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun transferWithProgress(
+        source: okio.Source,
+        sink: okio.BufferedSink,
+        expectedSize: Long,
+        progressCallback: suspend (Long, Long) -> Unit
+    ) {
+        val buffer = Buffer()
+        var totalBytesRead = 0L
+        while (true) {
+            val bytesRead = source.read(buffer, 8192)
+            if (bytesRead == -1L) break
+            if (!coroutineContext.isActive) {
+                throw DownloadException("Download cancelled")
+            }
+            sink.write(buffer, bytesRead)
+            totalBytesRead += bytesRead
+            progressCallback(totalBytesRead, expectedSize)
         }
     }
 
@@ -407,8 +397,8 @@ class DownloadManager(
                         // Write to temp file
                         val tempFile = storageManager.createTempFile("extract")
                         try {
-                            Files.newOutputStream(tempFile).use { output ->
-                                zip.copyTo(output)
+                            FileSystem.SYSTEM.sink(tempFile.toOkioPath()).buffer().use { sink ->
+                                sink.writeAll(zip.source())
                             }
 
                             // Verify and store
