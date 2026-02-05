@@ -146,9 +146,10 @@ class BundleCreatorTaskTest {
         assertTrue(bundleZip.exists(), "$bundleZipName should exist")
 
         ZipFile(bundleZip).use { zip ->
-            val entries = zip.entries().toList().map { it.name }
-            assertTrue(entries.contains("test.txt"))
-            assertTrue(entries.contains("subdir/nested.txt"))
+            val entries = zip.entries().toList().map { it.name }.toSet()
+            // Zip entries are now named by hash hex (content-addressable)
+            val expectedHashes = manifest.files.map { it.hash.hex }.toSet()
+            assertEquals(expectedHashes, entries)
         }
 
         // Verify files/ directory exists with content-addressable files
