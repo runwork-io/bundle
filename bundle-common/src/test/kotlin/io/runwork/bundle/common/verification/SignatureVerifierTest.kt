@@ -1,5 +1,6 @@
 package io.runwork.bundle.common.verification
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.TestFixtures
 import io.runwork.bundle.common.manifest.BundleFile
 import kotlin.test.Test
@@ -125,8 +126,7 @@ class SignatureVerifierTest {
         )
 
         // Sign the manifest (must match how SignatureVerifier verifies)
-        val json = kotlinx.serialization.json.Json
-        val dataToSign = json.encodeToString(
+        val dataToSign = BundleJson.signingJson.encodeToString(
             kotlinx.serialization.serializer<io.runwork.bundle.common.manifest.BundleManifest>(),
             manifest
         ).toByteArray(Charsets.UTF_8)
@@ -154,8 +154,7 @@ class SignatureVerifierTest {
         )
 
         // Sign with one key
-        val json = kotlinx.serialization.json.Json
-        val dataToSign = json.encodeToString(
+        val dataToSign = BundleJson.signingJson.encodeToString(
             kotlinx.serialization.serializer<io.runwork.bundle.common.manifest.BundleManifest>(),
             manifest
         ).toByteArray(Charsets.UTF_8)
@@ -184,8 +183,7 @@ class SignatureVerifierTest {
         )
 
         // Sign the original manifest
-        val json = kotlinx.serialization.json.Json
-        val dataToSign = json.encodeToString(
+        val dataToSign = BundleJson.signingJson.encodeToString(
             kotlinx.serialization.serializer<io.runwork.bundle.common.manifest.BundleManifest>(),
             manifest
         ).toByteArray(Charsets.UTF_8)
