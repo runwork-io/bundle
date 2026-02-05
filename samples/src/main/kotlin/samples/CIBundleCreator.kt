@@ -56,7 +56,6 @@ suspend fun createBundle() {
     // Step 4: Build unsigned manifest
     val unsignedManifest = builder.build(
         inputDir = inputDir,
-        targetPlatforms = targetPlatforms,
         buildNumber = System.currentTimeMillis(), // Or from CI build number
         mainClass = "com.myapp.MainKt",
         minShellVersion = 1,

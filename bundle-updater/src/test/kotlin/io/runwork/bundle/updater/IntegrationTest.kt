@@ -265,7 +265,6 @@ class IntegrationTest {
         // Step 3: Build manifest
         val manifest = builder.build(
             inputDir = inputDir.toFile(),
-            targetPlatforms = targetPlatforms,
             buildNumber = 12345,
             mainClass = "com.example.MainKt",
             minShellVersion = 1,

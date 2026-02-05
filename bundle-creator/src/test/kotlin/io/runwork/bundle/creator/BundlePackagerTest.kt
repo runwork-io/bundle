@@ -115,11 +115,11 @@ class BundlePackagerTest {
 
         // Zip filename should be content-addressable (8-char fingerprint)
         val zipName = result["macos-arm64"]!!.zip
-        assertTrue(zipName.startsWith("zips/bundle-"), "Zip name should start with 'zips/bundle-'")
+        assertTrue(zipName.startsWith("zips/"), "Zip name should start with 'zips/'")
         assertTrue(zipName.endsWith(".zip"), "Zip name should end with '.zip'")
 
         // Extract fingerprint part
-        val fingerprint = zipName.removePrefix("zips/bundle-").removeSuffix(".zip")
+        val fingerprint = zipName.removePrefix("zips/").removeSuffix(".zip")
         assertEquals(8, fingerprint.length, "Content fingerprint should be 8 characters")
 
         // Fingerprint should be hex (lowercase)
