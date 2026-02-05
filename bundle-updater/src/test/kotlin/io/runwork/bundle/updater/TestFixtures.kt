@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.manifest.BundleFile
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
@@ -256,8 +257,7 @@ class TestBundleManifestSigner private constructor(
         }
     }
 
-    // Must match SignatureVerifier's serialization format (no prettyPrint)
-    private val json = Json
+    private val json = BundleJson.signingJson
 
     fun sign(data: ByteArray): String {
         val keyFactory = KeyFactory.getInstance("Ed25519")

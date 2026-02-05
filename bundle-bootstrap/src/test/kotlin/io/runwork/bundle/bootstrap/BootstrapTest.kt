@@ -1,6 +1,7 @@
 package io.runwork.bundle.bootstrap
 
 import io.runwork.bundle.bootstrap.loader.BundleLoadException
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
@@ -419,7 +420,7 @@ class BootstrapTest {
         )
 
         // Sign the manifest
-        val jsonBytes = Json.encodeToString(unsigned).toByteArray()
+        val jsonBytes = BundleJson.signingJson.encodeToString(unsigned).toByteArray()
         val signature = keyPair.signer.sign(jsonBytes)
 
         return unsigned.copy(signature = "ed25519:$signature")
