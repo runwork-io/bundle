@@ -1,8 +1,8 @@
 package io.runwork.bundle.creator
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.manifest.BundleManifest
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
@@ -57,7 +57,7 @@ class BundleManifestSigner(
     fun signManifest(manifest: BundleManifest): BundleManifest {
         // Create manifest without signature for signing
         val manifestWithoutSig = manifest.copy(signature = "")
-        val dataToSign = Json.encodeToString(manifestWithoutSig).toByteArray(Charsets.UTF_8)
+        val dataToSign = BundleJson.signingJson.encodeToString(manifestWithoutSig).toByteArray(Charsets.UTF_8)
 
         val signatureBase64 = sign(dataToSign)
         return manifest.copy(signature = "ed25519:$signatureBase64")

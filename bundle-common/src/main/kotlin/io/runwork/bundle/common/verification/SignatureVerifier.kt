@@ -1,8 +1,8 @@
 package io.runwork.bundle.common.verification
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.manifest.BundleManifest
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.Signature
@@ -43,7 +43,7 @@ class SignatureVerifier(
 
             // Serialize manifest without signature for verification
             val manifestWithoutSig = manifest.copy(signature = "")
-            val dataToVerify = Json.encodeToString(manifestWithoutSig).toByteArray(Charsets.UTF_8)
+            val dataToVerify = BundleJson.signingJson.encodeToString(manifestWithoutSig).toByteArray(Charsets.UTF_8)
 
             val signature = Signature.getInstance("Ed25519")
             signature.initVerify(publicKey)
