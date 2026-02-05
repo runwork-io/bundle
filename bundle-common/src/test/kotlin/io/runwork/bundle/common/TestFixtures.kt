@@ -55,11 +55,11 @@ object TestFixtures {
         minShellVersion: Int = 1,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
-        val totalSize = files.sumOf { it.size }
+        val size = files.sumOf { it.size }
         val platformBundles = platforms.associateWith { platformId ->
             PlatformBundle(
-                bundleZip = "bundle-$platformId.zip",
-                totalSize = totalSize,
+                zip = "bundle-$platformId.zip",
+                size = size,
             )
         }
 

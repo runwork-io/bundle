@@ -140,7 +140,7 @@ class BundleCreatorTaskTest {
         assertTrue(verifier.verifyManifest(manifest), "Manifest signature should be valid")
 
         // Verify bundle zip exists and contains files (now content-addressed)
-        val bundleZipName = manifest.platformBundles["macos-arm64"]?.bundleZip
+        val bundleZipName = manifest.platformBundles["macos-arm64"]?.zip
         assertNotNull(bundleZipName, "Platform bundle should exist for macos-arm64")
         val bundleZip = File(outputDir, bundleZipName)
         assertTrue(bundleZip.exists(), "$bundleZipName should exist")
@@ -373,7 +373,10 @@ class BundleCreatorTaskTest {
         val manifestFile = testProjectDir.resolve("build/bundle/manifest.json").toFile()
         val manifest = json.decodeFromString<BundleManifest>(manifestFile.readText())
 
-        assertEquals(300L, manifest.totalSizeForPlatform(Platform.fromString("macos-arm64")))
+        // totalSize should equal the actual zip file size on disk, not the sum of file sizes
+        val bundleZipName = manifest.platformBundles["macos-arm64"]!!.zip
+        val bundleZipFile = testProjectDir.resolve("build/bundle/$bundleZipName").toFile()
+        assertEquals(bundleZipFile.length(), manifest.sizeForPlatform(Platform.fromString("macos-arm64")))
     }
 
     @Test

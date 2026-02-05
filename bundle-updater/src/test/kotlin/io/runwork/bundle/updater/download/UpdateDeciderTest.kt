@@ -209,7 +209,7 @@ class UpdateDeciderTest {
         val strategy = UpdateDecider.decide(manifest, platform, storageManager.contentStore)
 
         assertIs<DownloadStrategy.FullBundle>(strategy)
-        assertEquals(manifest.totalSizeForPlatform(platform), strategy.totalSize)
+        assertEquals(manifest.sizeForPlatform(platform), strategy.totalSize)
         assertEquals(3, strategy.fileCount)
     }
 

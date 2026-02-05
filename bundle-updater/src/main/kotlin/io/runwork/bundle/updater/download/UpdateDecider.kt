@@ -65,7 +65,7 @@ object UpdateDecider {
         val effectiveIncrementalSize = incrementalDataSize + incrementalOverhead
 
         // Full bundle size for this platform
-        val fullSize = manifest.totalSizeForPlatform(platform) ?: platformFiles.sumOf { it.size }
+        val fullSize = manifest.sizeForPlatform(platform) ?: platformFiles.sumOf { it.size }
 
         // Choose the strategy with lower effective cost
         return if (fullSize <= effectiveIncrementalSize) {
