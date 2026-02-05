@@ -14,9 +14,12 @@ import java.util.zip.ZipOutputStream
  * - zips/bundle-{fingerprint}.zip: Content-addressed bundle archives (platforms with identical content share the same zip)
  * - files/: Directory of files named by hash for incremental updates
  */
-class BundlePackager(
-    private val manifestBuilder: BundleManifestBuilder = BundleManifestBuilder(),
-) {
+class BundlePackager {
+    companion object {
+        private const val ZIPS_FOLDER = "zips"
+    }
+
+    private val manifestBuilder: BundleManifestBuilder = BundleManifestBuilder()
 
     /**
      * Package a multi-platform bundle for distribution.
@@ -37,12 +40,8 @@ class BundlePackager(
         bundleFiles: List<BundleFile>,
         targetPlatforms: List<String>,
     ): Map<String, PlatformBundle> {
-        outputDir.mkdirs()
-        File(outputDir, "zips").mkdirs()
-
-        // Create files/ directory with content-addressable names (all files)
-        val filesDir = File(outputDir, "files")
-        filesDir.mkdirs()
+        val zipsDir = File(outputDir, ZIPS_FOLDER).also { it.mkdirs() }
+        val filesDir = File(outputDir, "files").also { it.mkdirs() }
 
         for (bundleFile in bundleFiles) {
             val sourceFile = File(inputDir, bundleFile.path)
@@ -60,8 +59,8 @@ class BundlePackager(
 
         for ((fingerprint, platforms) in platformGroups) {
             // Content-addressable zip filename
-            val zipFileName = "bundle-$fingerprint.zip"
-            val bundleZip = File(outputDir, "zips/$zipFileName")
+            val zipFileName = "$fingerprint.zip"
+            val bundleZip = File(zipsDir, zipFileName)
 
             // Get files for this content (all platforms in group have same files)
             val platform = Platform.fromString(platforms.first())
@@ -75,7 +74,7 @@ class BundlePackager(
 
             // Point all platforms in the group to this zip with actual zip size
             val platformBundle = PlatformBundle(
-                zip = "zips/$zipFileName",
+                zip = "$ZIPS_FOLDER/$zipFileName",
                 size = bundleZip.length(),
             )
             for (platformId in platforms) {
