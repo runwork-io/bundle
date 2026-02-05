@@ -64,7 +64,7 @@ class ContentAddressableStore(
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
-                moveFile(tempFile, destPath)
+                Files.move(tempFile, destPath, StandardCopyOption.ATOMIC_MOVE)
             } else {
                 // File already exists with this hash, delete the duplicate
                 Files.delete(tempFile)
@@ -72,21 +72,6 @@ class ContentAddressableStore(
         }
 
         return hash
-    }
-
-    /**
-     * Move a file with atomic move, falling back to copy-then-delete if not supported.
-     *
-     * Note: This function performs I/O and must be called from within a Dispatchers.IO context.
-     */
-    private fun moveFile(source: Path, dest: Path) {
-        try {
-            Files.move(source, dest, StandardCopyOption.ATOMIC_MOVE)
-        } catch (e: AtomicMoveNotSupportedException) {
-            // Fallback for cross-filesystem moves or unsupported filesystems
-            Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING)
-            Files.delete(source)
-        }
     }
 
     /**
@@ -111,7 +96,7 @@ class ContentAddressableStore(
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
-                moveFile(tempFile, destPath)
+                Files.move(tempFile, destPath, StandardCopyOption.ATOMIC_MOVE)
             } else {
                 Files.delete(tempFile)
             }
