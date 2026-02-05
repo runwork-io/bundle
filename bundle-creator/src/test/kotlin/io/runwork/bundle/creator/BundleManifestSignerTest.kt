@@ -122,7 +122,7 @@ class BundleManifestSignerTest {
         // All fields should be preserved
         assertEquals(manifest.schemaVersion, signedManifest.schemaVersion)
         assertEquals(manifest.buildNumber, signedManifest.buildNumber)
-        assertEquals(manifest.platformBundles.keys, signedManifest.platformBundles.keys)
+        assertEquals(manifest.zips.keys, signedManifest.zips.keys)
         assertTrue(signedManifest.supportsPlatform(testPlatform))
         assertEquals(manifest.createdAt, signedManifest.createdAt)
         assertEquals(manifest.minShellVersion, signedManifest.minShellVersion)

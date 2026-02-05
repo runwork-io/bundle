@@ -51,7 +51,7 @@ object TestFixtures {
      *
      * @param files List of bundle files
      * @param buildNumber Build number for the manifest
-     * @param platforms List of platform IDs to include in platformBundles (defaults to ["macos-arm64"])
+     * @param platforms List of platform IDs to include in zips (defaults to ["macos-arm64"])
      * @param mainClass Main class name
      * @param minShellVersion Minimum shell version required
      * @param shellUpdateUrl Optional shell update URL
@@ -65,9 +65,9 @@ object TestFixtures {
         shellUpdateUrl: String? = null,
     ): BundleManifest {
         val size = files.sumOf { it.size }
-        val platformBundles = platforms.associateWith { platformId ->
+        val zips = platforms.associateWith { platformId ->
             PlatformBundle(
-                zip = "bundle-$platformId.zip",
+                zip = "zips/bundle-$platformId.zip",
                 size = size,
             )
         }
@@ -80,7 +80,7 @@ object TestFixtures {
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            platformBundles = platformBundles,
+            zips = zips,
             signature = ""
         )
     }
@@ -207,8 +207,9 @@ object TestFixtures {
 
         // Optionally create platform-specific bundle zips
         if (includeZip) {
-            for ((platformId, platformBundle) in manifest.platformBundles) {
+            for ((platformId, platformBundle) in manifest.zips) {
                 val zipPath = baseDir.resolve(platformBundle.zip)
+                Files.createDirectories(zipPath.parent)
                 createBundleZip(zipPath, manifest, files)
             }
         }

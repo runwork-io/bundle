@@ -142,7 +142,7 @@ class BundleUpdater(
 
             // Verify platform is supported
             if (!manifest.supportsPlatform(config.platform)) {
-                val supported = manifest.platformBundles.keys.sorted().joinToString(", ")
+                val supported = manifest.zips.keys.sorted().joinToString(", ")
                 return ManifestFetchResult.PlatformMismatch(
                     expected = config.platform.toString(),
                     actual = supported

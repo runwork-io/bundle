@@ -409,9 +409,9 @@ class BootstrapTest {
             shellUpdateUrl = shellUpdateUrl,
             files = files,
             mainClass = mainClass,
-            platformBundles = mapOf(
+            zips = mapOf(
                 platform to PlatformBundle(
-                    zip = "bundle-$platform.zip",
+                    zip = "zips/bundle-$platform.zip",
                     size = files.sumOf { it.size }
                 )
             ),

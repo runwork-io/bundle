@@ -93,7 +93,7 @@ class BundleBootstrap(
 
         // Check platform support
         if (!manifest.supportsPlatform(config.platform)) {
-            val supportedPlatforms = manifest.platformBundles.keys.sorted().joinToString(", ")
+            val supportedPlatforms = manifest.zips.keys.sorted().joinToString(", ")
             return BundleValidationResult.Failed(
                 "Platform ${config.platform} not supported. Supported platforms: $supportedPlatforms"
             )

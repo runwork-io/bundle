@@ -28,7 +28,7 @@ import java.util.zip.ZipOutputStream
  *
  * This task packages a directory into a signed bundle with:
  * - manifest.json: Signed manifest file with multi-platform support
- * - bundle-{fingerprint}.zip: Per-platform bundle archives for initial downloads (deduplicated by content)
+ * - zips/bundle-{fingerprint}.zip: Per-platform bundle archives for initial downloads (deduplicated by content)
  * - files/: Individual files named by hash for incremental updates
  *
  * Target platforms must be explicitly specified via the `platforms` property.
@@ -216,6 +216,8 @@ abstract class BundleCreatorTask : DefaultTask() {
         outputDir.mkdirs()
         val filesDir = File(outputDir, "files")
         filesDir.mkdirs()
+        val zipsDir = File(outputDir, "zips")
+        zipsDir.mkdirs()
 
         // Copy all files to files/ directory (content-addressable)
         for (bundleFile in bundleFiles) {
@@ -235,7 +237,7 @@ abstract class BundleCreatorTask : DefaultTask() {
         for ((fingerprint, platforms) in platformGroups) {
             // Content-addressable zip filename
             val zipFileName = "bundle-$fingerprint.zip"
-            val bundleZip = File(outputDir, zipFileName)
+            val bundleZip = File(outputDir, "zips/$zipFileName")
 
             // Get files for this content (all platforms in group have same files)
             val platform = Platform.fromString(platforms.first())
@@ -249,14 +251,14 @@ abstract class BundleCreatorTask : DefaultTask() {
 
             // Point all platforms in the group to this zip
             for (platformId in platforms) {
-                platformBundleZips[platformId] = zipFileName
+                platformBundleZips[platformId] = "zips/$zipFileName"
             }
 
             logger.lifecycle("  Created $zipFileName (${platformFiles.size} files) for: ${platforms.joinToString(", ")}")
         }
 
         // Build platform bundles map with actual zip file sizes
-        val platformBundlesMap = targetPlatforms.associateWith { platformId ->
+        val zipsMap = targetPlatforms.associateWith { platformId ->
             val zipFileName = platformBundleZips[platformId]!!
             val zipFile = File(outputDir, zipFileName)
             PlatformBundle(
@@ -274,7 +276,7 @@ abstract class BundleCreatorTask : DefaultTask() {
             shellUpdateUrl = updateUrl,
             files = bundleFiles,
             mainClass = mainClass.get(),
-            platformBundles = platformBundlesMap,
+            zips = zipsMap,
             signature = ""
         )
 
@@ -295,7 +297,7 @@ abstract class BundleCreatorTask : DefaultTask() {
         // List unique zip files
         val uniqueZips = platformBundleZips.entries.groupBy({ it.value }, { it.key })
         for ((zipName, platformsForZip) in uniqueZips) {
-            val size = platformBundlesMap[platformsForZip.first()]!!.size
+            val size = zipsMap[platformsForZip.first()]!!.size
             val sizeMb = size / 1024 / 1024
             logger.lifecycle("  $zipName - $sizeMb MB (${platformsForZip.joinToString(", ")})")
         }
