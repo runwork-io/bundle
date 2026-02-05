@@ -34,7 +34,7 @@ class BundleManifestBuilder {
      * @param buildNumber Build number for the manifest
      * @param mainClass Fully qualified main class name
      * @param minShellVersion Minimum shell version required
-     * @param platformBundles Map of platform ID to PlatformBundle (from BundlePackager output)
+     * @param zips Map of platform ID to PlatformBundle (from BundlePackager output)
      * @param shellUpdateUrl Optional URL for shell updates
      * @return Unsigned manifest (signature field is empty)
      */
@@ -44,7 +44,7 @@ class BundleManifestBuilder {
         buildNumber: Long,
         mainClass: String,
         minShellVersion: Int,
-        platformBundles: Map<String, PlatformBundle>,
+        zips: Map<String, PlatformBundle>,
         shellUpdateUrl: String? = null,
     ): BundleManifest {
         val bundleFiles = collectFilesWithPlatformConstraints(inputDir)
@@ -57,7 +57,7 @@ class BundleManifestBuilder {
             shellUpdateUrl = shellUpdateUrl,
             files = bundleFiles,
             mainClass = mainClass,
-            platformBundles = platformBundles,
+            zips = zips,
             signature = "",
         )
     }

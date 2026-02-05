@@ -11,7 +11,7 @@ import java.util.zip.ZipOutputStream
  * Packages bundle files into distributable formats.
  *
  * Creates:
- * - bundle-{fingerprint}.zip: Content-addressed bundle archives (platforms with identical content share the same zip)
+ * - zips/bundle-{fingerprint}.zip: Content-addressed bundle archives (platforms with identical content share the same zip)
  * - files/: Directory of files named by hash for incremental updates
  */
 class BundlePackager(
@@ -38,6 +38,7 @@ class BundlePackager(
         targetPlatforms: List<String>,
     ): Map<String, PlatformBundle> {
         outputDir.mkdirs()
+        File(outputDir, "zips").mkdirs()
 
         // Create files/ directory with content-addressable names (all files)
         val filesDir = File(outputDir, "files")
@@ -55,12 +56,12 @@ class BundlePackager(
 
         // Group platforms by content fingerprint to deduplicate identical zips
         val platformGroups = manifestBuilder.groupPlatformsByContent(bundleFiles, targetPlatforms)
-        val platformBundles = mutableMapOf<String, PlatformBundle>()
+        val zips = mutableMapOf<String, PlatformBundle>()
 
         for ((fingerprint, platforms) in platformGroups) {
             // Content-addressable zip filename
             val zipFileName = "bundle-$fingerprint.zip"
-            val bundleZip = File(outputDir, zipFileName)
+            val bundleZip = File(outputDir, "zips/$zipFileName")
 
             // Get files for this content (all platforms in group have same files)
             val platform = Platform.fromString(platforms.first())
@@ -74,15 +75,15 @@ class BundlePackager(
 
             // Point all platforms in the group to this zip with actual zip size
             val platformBundle = PlatformBundle(
-                zip = zipFileName,
+                zip = "zips/$zipFileName",
                 size = bundleZip.length(),
             )
             for (platformId in platforms) {
-                platformBundles[platformId] = platformBundle
+                zips[platformId] = platformBundle
             }
         }
 
-        return platformBundles
+        return zips
     }
 
     /**

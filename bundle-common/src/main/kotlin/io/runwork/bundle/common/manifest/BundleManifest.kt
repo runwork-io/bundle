@@ -36,7 +36,7 @@ data class BundleManifest(
     val mainClass: String,
 
     /** Map of platform ID (e.g., "macos-arm64") to platform-specific bundle info */
-    val platformBundles: Map<String, PlatformBundle>,
+    val zips: Map<String, PlatformBundle>,
 
     /** Ed25519 signature of the manifest (excluding this field), prefixed with "ed25519:" */
     val signature: String = "",
@@ -54,10 +54,10 @@ data class BundleManifest(
     /**
      * Check if this manifest supports the given platform.
      *
-     * A platform is supported if it has an entry in platformBundles.
+     * A platform is supported if it has an entry in zips.
      */
     fun supportsPlatform(platform: Platform): Boolean {
-        return platformBundles.containsKey(platform.toString())
+        return zips.containsKey(platform.toString())
     }
 
     /**
@@ -66,7 +66,7 @@ data class BundleManifest(
      * Returns null if the platform is not supported.
      */
     fun sizeForPlatform(platform: Platform): Long? {
-        return platformBundles[platform.toString()]?.size
+        return zips[platform.toString()]?.size
     }
 
     /**
@@ -75,6 +75,6 @@ data class BundleManifest(
      * Returns null if the platform is not supported.
      */
     fun zipForPlatform(platform: Platform): String? {
-        return platformBundles[platform.toString()]?.zip
+        return zips[platform.toString()]?.zip
     }
 }

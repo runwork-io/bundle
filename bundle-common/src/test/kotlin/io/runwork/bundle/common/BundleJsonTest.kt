@@ -38,14 +38,14 @@ class BundleJsonTest {
                 ),
             ),
             mainClass = "com.example.MainKt",
-            platformBundles = mapOf(
-                "macos-arm64" to PlatformBundle(zip = "bundle-macos-arm64.zip", size = 3072),
-                "linux-x64" to PlatformBundle(zip = "bundle-linux-x64.zip", size = 4096),
+            zips = mapOf(
+                "macos-arm64" to PlatformBundle(zip = "zips/bundle-macos-arm64.zip", size = 3072),
+                "linux-x64" to PlatformBundle(zip = "zips/bundle-linux-x64.zip", size = 4096),
             ),
             signature = "", // default → omitted by encodeDefaults = false
         )
 
-        val expected = """{"schemaVersion":1,"buildNumber":42,"createdAt":"2025-06-15T12:00:00Z","minShellVersion":3,"shellUpdateUrl":"https://example.com/update","files":[{"path":"app.jar","hash":"sha256:aaaa","size":1024},{"path":"natives/libfoo.dylib","hash":"sha256:bbbb","size":2048,"os":"macos","arch":"arm64"}],"mainClass":"com.example.MainKt","platformBundles":{"macos-arm64":{"zip":"bundle-macos-arm64.zip","size":3072},"linux-x64":{"zip":"bundle-linux-x64.zip","size":4096}}}"""
+        val expected = """{"schemaVersion":1,"buildNumber":42,"createdAt":"2025-06-15T12:00:00Z","minShellVersion":3,"shellUpdateUrl":"https://example.com/update","files":[{"path":"app.jar","hash":"sha256:aaaa","size":1024},{"path":"natives/libfoo.dylib","hash":"sha256:bbbb","size":2048,"os":"macos","arch":"arm64"}],"mainClass":"com.example.MainKt","zips":{"macos-arm64":{"zip":"zips/bundle-macos-arm64.zip","size":3072},"linux-x64":{"zip":"zips/bundle-linux-x64.zip","size":4096}}}"""
 
         val actual = BundleJson.signingJson.encodeToString(manifest)
 
@@ -70,13 +70,13 @@ class BundleJsonTest {
                 ),
             ),
             mainClass = "io.runwork.TestMain",
-            platformBundles = mapOf(
-                "macos-arm64" to PlatformBundle(zip = "bundle-macos-arm64.zip", size = 512),
+            zips = mapOf(
+                "macos-arm64" to PlatformBundle(zip = "zips/bundle-macos-arm64.zip", size = 512),
             ),
             signature = "", // default → omitted by encodeDefaults = false
         )
 
-        val expected = """{"schemaVersion":1,"buildNumber":1,"createdAt":"2025-01-01T00:00:00Z","minShellVersion":1,"files":[{"path":"app.jar","hash":"sha256:cccc","size":512}],"mainClass":"io.runwork.TestMain","platformBundles":{"macos-arm64":{"zip":"bundle-macos-arm64.zip","size":512}}}"""
+        val expected = """{"schemaVersion":1,"buildNumber":1,"createdAt":"2025-01-01T00:00:00Z","minShellVersion":1,"files":[{"path":"app.jar","hash":"sha256:cccc","size":512}],"mainClass":"io.runwork.TestMain","zips":{"macos-arm64":{"zip":"zips/bundle-macos-arm64.zip","size":512}}}"""
 
         val actual = BundleJson.signingJson.encodeToString(manifest)
 
