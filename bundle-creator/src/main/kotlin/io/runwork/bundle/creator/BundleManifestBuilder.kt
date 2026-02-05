@@ -40,7 +40,6 @@ class BundleManifestBuilder {
      */
     fun build(
         inputDir: File,
-        targetPlatforms: List<String>,
         buildNumber: Long,
         mainClass: String,
         minShellVersion: Int,
