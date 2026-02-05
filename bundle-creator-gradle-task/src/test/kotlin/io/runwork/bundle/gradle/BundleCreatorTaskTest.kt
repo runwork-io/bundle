@@ -158,7 +158,7 @@ class BundleCreatorTaskTest {
 
         // Each manifest file should have a corresponding hash-named file
         for (bundleFile in manifest.files) {
-            val hashFileName = bundleFile.hash.removePrefix("sha256:")
+            val hashFileName = bundleFile.hash.value
             val hashedFile = File(filesDir, hashFileName)
             assertTrue(hashedFile.exists(), "File ${bundleFile.path} should exist as $hashFileName")
         }

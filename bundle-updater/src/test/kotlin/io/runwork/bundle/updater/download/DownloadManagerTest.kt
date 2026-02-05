@@ -2,6 +2,7 @@ package io.runwork.bundle.updater.download
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.updater.TestFixtures
 import io.runwork.bundle.updater.result.DownloadException
 import io.runwork.bundle.updater.result.DownloadResult
@@ -56,7 +57,7 @@ class DownloadManagerTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             ),
@@ -255,7 +256,7 @@ class DownloadManagerTest {
         // Total = 5MB + 100KB = ~5.1MB
         // Incremental = 100KB + 50KB overhead = 150KB << 5.1MB
         val content = "A".repeat(100_000) // 100KB content
-        val wrongHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        val wrongHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000")
 
         // Store large existing files so incremental strategy is chosen
         val existingContent = "B".repeat(1_000_000) // 1MB each
@@ -305,7 +306,7 @@ class DownloadManagerTest {
             files = (1..10).map { i ->
                 BundleFile(
                     path = "file$i.txt",
-                    hash = if (i == 1) fileHash else "sha256:${i.toString().padStart(64, '0')}",
+                    hash = if (i == 1) fileHash else BundleFileHash("sha256", i.toString().padStart(64, '0')),
                     size = 1000,
                 )
             },
@@ -337,7 +338,7 @@ class DownloadManagerTest {
             files = listOf(
                 BundleFile(
                     path = "file.txt",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             ),
@@ -372,7 +373,7 @@ class DownloadManagerTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             ),

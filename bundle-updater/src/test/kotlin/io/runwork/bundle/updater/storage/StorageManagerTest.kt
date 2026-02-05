@@ -2,6 +2,7 @@ package io.runwork.bundle.updater.storage
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.updater.TestFixtures
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -158,7 +159,7 @@ class StorageManagerTest {
             files = listOf(
                 BundleFile(
                     path = "missing.jar",
-                    hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                    hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000000"),
                     size = 100,
                 )
             ),

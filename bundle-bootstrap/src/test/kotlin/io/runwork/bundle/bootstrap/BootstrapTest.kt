@@ -5,6 +5,7 @@ import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
@@ -197,7 +198,7 @@ class BootstrapTest {
         // Create CAS directory and write WRONG content to CAS file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        val hashFileName = bundleFile.hash.value
         Files.write(casDir.resolve(hashFileName), "corrupted content".toByteArray())
 
         val versionDir = appDataDir.resolve("versions/${manifest.buildNumber}")
@@ -226,7 +227,7 @@ class BootstrapTest {
         // Create CAS file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        val hashFileName = bundleFile.hash.value
         val casFile = casDir.resolve(hashFileName)
         Files.write(casFile, fileContent.toByteArray())
 
@@ -260,7 +261,7 @@ class BootstrapTest {
         // Create CAS file with correct content
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val hashFileName = bundleFile.hash.removePrefix("sha256:")
+        val hashFileName = bundleFile.hash.value
         val casFile = casDir.resolve(hashFileName)
         Files.write(casFile, originalContent.toByteArray())
 
@@ -347,7 +348,7 @@ class BootstrapTest {
         return BundleBootstrap(config)
     }
 
-    private fun setupBundle(manifest: BundleManifest, files: Map<String, ByteArray>) {
+    private fun setupBundle(manifest: BundleManifest, files: Map<BundleFileHash, ByteArray>) {
         // Write manifest.json
         val manifestPath = appDataDir.resolve("manifest.json")
         Files.writeString(manifestPath, json.encodeToString(manifest))
@@ -363,7 +364,7 @@ class BootstrapTest {
             val content = files[bundleFile.hash]
             if (content != null) {
                 // Write to CAS (filename is the hash without "sha256:" prefix)
-                val hashFileName = bundleFile.hash.removePrefix("sha256:")
+                val hashFileName = bundleFile.hash.value
                 val casFile = casDir.resolve(hashFileName)
                 Files.write(casFile, content)
 

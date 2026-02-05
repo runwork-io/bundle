@@ -2,6 +2,7 @@ package io.runwork.bundle.creator
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.verification.SignatureVerifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -85,7 +86,7 @@ class BundleManifestSignerTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             )
@@ -106,7 +107,7 @@ class BundleManifestSignerTest {
             files = listOf(
                 BundleFile(
                     path = "app.jar",
-                    hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    hash = BundleFileHash.parse("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
                     size = 1000,
                 )
             ),

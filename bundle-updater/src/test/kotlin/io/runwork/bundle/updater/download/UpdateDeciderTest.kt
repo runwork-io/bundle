@@ -2,6 +2,7 @@ package io.runwork.bundle.updater.download
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.updater.TestFixtures
 import io.runwork.bundle.updater.storage.StorageManager
 import kotlinx.coroutines.test.runTest
@@ -67,7 +68,7 @@ class UpdateDeciderTest {
         val files = (1..10).map { i ->
             BundleFile(
                 path = "file$i.jar",
-                hash = "sha256:${i.toString().padStart(64, '0')}",
+                hash = BundleFileHash("sha256", i.toString().padStart(64, '0')),
                 size = 1000L, // 1KB
             )
         }
@@ -106,7 +107,7 @@ class UpdateDeciderTest {
         }
         val missingFile = BundleFile(
             path = "new-file.txt",
-            hash = "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+            hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000001"),
             size = 100_000L, // 100KB
         )
 
@@ -147,7 +148,7 @@ class UpdateDeciderTest {
         val missingFiles = (1..4).map { i ->
             BundleFile(
                 path = "missing$i.bin",
-                hash = "sha256:${i.toString().padStart(64, '0')}",
+                hash = BundleFileHash("sha256", i.toString().padStart(64, '0')),
                 size = 500_000L, // 500KB each
             )
         }
@@ -172,7 +173,7 @@ class UpdateDeciderTest {
         val tempFile = TestFixtures.createTestFile(tempDir, "temp.txt", existingContent)
         storageManager.contentStore.store(tempFile)
 
-        val missingHash = "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+        val missingHash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000001")
 
         val manifest = TestFixtures.createTestManifest(
             files = listOf(
@@ -199,9 +200,9 @@ class UpdateDeciderTest {
         // Full = 3KB
         // Full wins
         val files = listOf(
-            BundleFile(path = "file1.jar", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000001", size = 1000L),
-            BundleFile(path = "file2.jar", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000002", size = 2000L),
-            BundleFile(path = "file3.jar", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000003", size = 3000L)
+            BundleFile(path = "file1.jar", hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000001"), size = 1000L),
+            BundleFile(path = "file2.jar", hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000002"), size = 2000L),
+            BundleFile(path = "file3.jar", hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000003"), size = 3000L)
         )
 
         val manifest = TestFixtures.createTestManifest(files = files)
@@ -242,7 +243,7 @@ class UpdateDeciderTest {
 
         val missingFile = BundleFile(
             path = "missing.txt",
-            hash = "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+            hash = BundleFileHash("sha256", "0000000000000000000000000000000000000000000000000000000000000001"),
             size = 100_000L, // 100KB
         )
 

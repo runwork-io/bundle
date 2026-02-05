@@ -5,6 +5,7 @@ import io.runwork.bundle.bootstrap.BundleBootstrapConfig
 import io.runwork.bundle.bootstrap.BundleValidationResult
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.creator.BundlePackager
@@ -283,7 +284,7 @@ class IntegrationTest {
         // Verify files/ contains hash-named files
         val filesDir = outputDir.resolve("files")
         for (bf in bundleFiles) {
-            val hashName = bf.hash.removePrefix("sha256:")
+            val hashName = bf.hash.value
             assertTrue(Files.exists(filesDir.resolve(hashName)), "Missing file: ${bf.path}")
         }
 
@@ -347,7 +348,7 @@ class IntegrationTest {
 
         // Setup bundle, then corrupt the CAS file (not version directory)
         setupExistingBundle(appDataDir, manifest, mapOf("app.jar" to originalContent))
-        val casFilePath = appDataDir.resolve("cas/${files[0].hash.removePrefix("sha256:")}")
+        val casFilePath = appDataDir.resolve("cas/${files[0].hash.value}")
         Files.writeString(casFilePath, "corrupted!")
 
         val config = BundleBootstrapConfig(
@@ -429,7 +430,7 @@ class IntegrationTest {
             Files.write(filePath, content)
 
             // Also write to CAS (without sha256: prefix)
-            val casPath = casDir.resolve(file.hash.removePrefix("sha256:"))
+            val casPath = casDir.resolve(file.hash.value)
             Files.write(casPath, content)
         }
 
@@ -483,7 +484,7 @@ class IntegrationTest {
         // Pre-seed the CAS with the existing file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val existingHash = existingFile.hash.removePrefix("sha256:")
+        val existingHash = existingFile.hash.value
         Files.write(casDir.resolve(existingHash), existingContent)
 
         // Server returns only the missing file (incremental download)
@@ -512,7 +513,7 @@ class IntegrationTest {
 
         // Verify the request was for the missing file
         val request = mockServer.takeRequest()
-        val newHash = newFile.hash.removePrefix("sha256:")
+        val newHash = newFile.hash.value
         assertEquals("/files/$newHash", request.path)
 
         // Finalize: prepare version
@@ -614,7 +615,7 @@ class IntegrationTest {
         // Pre-seed the CAS with the existing file
         val casDir = appDataDir.resolve("cas")
         Files.createDirectories(casDir)
-        val existingHash = existingFile.hash.removePrefix("sha256:")
+        val existingHash = existingFile.hash.value
         Files.write(casDir.resolve(existingHash), existingContent)
 
         // Create file-based bundle server with only the new file

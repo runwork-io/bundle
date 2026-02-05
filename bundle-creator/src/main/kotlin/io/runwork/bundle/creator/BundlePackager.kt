@@ -46,7 +46,7 @@ class BundlePackager(
 
         for (bundleFile in bundleFiles) {
             val sourceFile = File(inputDir, bundleFile.path)
-            val hashFileName = bundleFile.hash.removePrefix("sha256:")
+            val hashFileName = bundleFile.hash.value
             val destFile = File(filesDir, hashFileName)
 
             if (!destFile.exists()) {

@@ -13,8 +13,8 @@ data class BundleFile(
     /** Relative path within the bundle (e.g., "app.jar", "natives/libwhisper.dylib") */
     val path: String,
 
-    /** SHA-256 hash prefixed with "sha256:" */
-    val hash: String,
+    /** SHA-256 hash of the file */
+    val hash: BundleFileHash,
 
     /** File size in bytes */
     val size: Long,

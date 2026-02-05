@@ -3,6 +3,7 @@ package io.runwork.bundle.creator
 import io.runwork.bundle.common.Arch
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -37,7 +38,7 @@ class BundlePackagerTest {
         File(inputDir, "lib/app.jar").writeText("jar content")
 
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 11, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 11, null, null),
         )
 
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
@@ -71,8 +72,8 @@ class BundlePackagerTest {
         File(inputDir, "resources/macos-arm64/native.dylib").writeText("native arm64")
 
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 11, null, null),
-            BundleFile("resources/macos-arm64/native.dylib", "sha256:native123", 12, Os.MACOS, Arch.ARM64),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 11, null, null),
+            BundleFile("resources/macos-arm64/native.dylib", BundleFileHash.parse("sha256:native123"), 12, Os.MACOS, Arch.ARM64),
         )
 
         val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
@@ -105,7 +106,7 @@ class BundlePackagerTest {
         File(inputDir, "lib/app.jar").writeText("jar content")
 
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 11, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 11, null, null),
         )
 
         val targetPlatforms = listOf("macos-arm64")
@@ -132,8 +133,8 @@ class BundlePackagerTest {
         File(inputDir, "lib/util.jar").writeText("util content")
 
         val bundleFiles = listOf(
-            BundleFile("lib/app.jar", "sha256:abc123", 11, null, null),
-            BundleFile("lib/util.jar", "sha256:def456", 12, null, null),
+            BundleFile("lib/app.jar", BundleFileHash.parse("sha256:abc123"), 11, null, null),
+            BundleFile("lib/util.jar", BundleFileHash.parse("sha256:def456"), 12, null, null),
         )
 
         packager.packageBundle(inputDir, outputDir, bundleFiles, listOf("macos-arm64"))

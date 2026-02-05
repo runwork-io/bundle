@@ -1,5 +1,6 @@
 package io.runwork.bundle.common.storage
 
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.verification.HashVerifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,21 +30,19 @@ class ContentAddressableStore(
     /**
      * Check if a file with the given hash exists in the store.
      *
-     * @param hash SHA-256 hash prefixed with "sha256:" or just the hex string
+     * @param hash The file hash
      */
-    suspend fun contains(hash: String): Boolean = withContext(Dispatchers.IO) {
-        val fileName = hash.removePrefix("sha256:")
-        Files.exists(storeDir.resolve(fileName))
+    suspend fun contains(hash: BundleFileHash): Boolean = withContext(Dispatchers.IO) {
+        Files.exists(storeDir.resolve(hash.value))
     }
 
     /**
      * Get the path to a file by hash, or null if not present.
      *
-     * @param hash SHA-256 hash prefixed with "sha256:" or just the hex string
+     * @param hash The file hash
      */
-    suspend fun getPath(hash: String): Path? = withContext(Dispatchers.IO) {
-        val fileName = hash.removePrefix("sha256:")
-        val path = storeDir.resolve(fileName)
+    suspend fun getPath(hash: BundleFileHash): Path? = withContext(Dispatchers.IO) {
+        val path = storeDir.resolve(hash.value)
         if (Files.exists(path)) path else null
     }
 
@@ -54,13 +53,12 @@ class ContentAddressableStore(
      * If a file with the same hash already exists, the temp file is deleted.
      *
      * @param tempFile Path to the temporary file to store
-     * @return The SHA-256 hash of the file (prefixed with "sha256:")
+     * @return The hash of the file
      */
-    suspend fun store(tempFile: Path): String {
+    suspend fun store(tempFile: Path): BundleFileHash {
         ensureDirectoryExists()
         val hash = computeHash(tempFile)
-        val fileName = hash.removePrefix("sha256:")
-        val destPath = storeDir.resolve(fileName)
+        val destPath = storeDir.resolve(hash.value)
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
@@ -95,10 +93,10 @@ class ContentAddressableStore(
      * This is more efficient when the hash is already known (e.g., from manifest).
      *
      * @param tempFile Path to the temporary file to store
-     * @param expectedHash The expected SHA-256 hash (prefixed with "sha256:")
+     * @param expectedHash The expected hash
      * @return true if the hash matched and file was stored, false if hash mismatch
      */
-    suspend fun storeWithHash(tempFile: Path, expectedHash: String): Boolean {
+    suspend fun storeWithHash(tempFile: Path, expectedHash: BundleFileHash): Boolean {
         ensureDirectoryExists()
         val actualHash = computeHash(tempFile)
         if (actualHash != expectedHash) {
@@ -106,8 +104,7 @@ class ContentAddressableStore(
             return false
         }
 
-        val fileName = expectedHash.removePrefix("sha256:")
-        val destPath = storeDir.resolve(fileName)
+        val destPath = storeDir.resolve(expectedHash.value)
 
         withContext(Dispatchers.IO) {
             if (!Files.exists(destPath)) {
@@ -123,10 +120,10 @@ class ContentAddressableStore(
     /**
      * Verify a file's hash matches the expected value.
      *
-     * @param hash The expected SHA-256 hash (prefixed with "sha256:")
+     * @param hash The expected hash
      * @return true if the file exists and hash matches, false otherwise
      */
-    suspend fun verify(hash: String): Boolean {
+    suspend fun verify(hash: BundleFileHash): Boolean {
         val path = getPath(hash) ?: return false
         val actualHash = computeHash(path)
         return actualHash == hash
@@ -135,25 +132,24 @@ class ContentAddressableStore(
     /**
      * Delete a file from the store.
      *
-     * @param hash SHA-256 hash of the file to delete
+     * @param hash Hash of the file to delete
      * @return true if the file was deleted, false if it didn't exist
      */
-    suspend fun delete(hash: String): Boolean = withContext(Dispatchers.IO) {
-        val fileName = hash.removePrefix("sha256:")
-        val path = storeDir.resolve(fileName)
+    suspend fun delete(hash: BundleFileHash): Boolean = withContext(Dispatchers.IO) {
+        val path = storeDir.resolve(hash.value)
         Files.deleteIfExists(path)
     }
 
     /**
      * List all file hashes in the store.
      */
-    suspend fun listHashes(): List<String> = withContext(Dispatchers.IO) {
+    suspend fun listHashes(): List<BundleFileHash> = withContext(Dispatchers.IO) {
         if (!Files.exists(storeDir)) return@withContext listOf()
 
         Files.list(storeDir).use { stream ->
             stream
                 .filter { Files.isRegularFile(it) }
-                .map { "sha256:${it.fileName}" }
+                .map { BundleFileHash("sha256", it.fileName.toString()) }
                 .toList()
         }
     }
@@ -162,7 +158,7 @@ class ContentAddressableStore(
      * Compute the SHA-256 hash of a file.
      *
      * @param path Path to the file
-     * @return SHA-256 hash prefixed with "sha256:"
+     * @return The file hash
      */
-    suspend fun computeHash(path: Path): String = HashVerifier.computeHash(path)
+    suspend fun computeHash(path: Path): BundleFileHash = HashVerifier.computeHash(path)
 }

@@ -1,5 +1,6 @@
 package io.runwork.bundle.common.verification
 
+import io.runwork.bundle.common.manifest.BundleFileHash
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -27,9 +28,9 @@ object HashVerifier {
      * Offloads I/O to the IO dispatcher for use in coroutine contexts.
      *
      * @param path Path to the file
-     * @return SHA-256 hash prefixed with "sha256:"
+     * @return SHA-256 hash as BundleFileHash
      */
-    suspend fun computeHash(path: Path): String = withContext(Dispatchers.IO) {
+    suspend fun computeHash(path: Path): BundleFileHash = withContext(Dispatchers.IO) {
         computeHashSync(path)
     }
 
@@ -39,12 +40,12 @@ object HashVerifier {
      * Use this when calling from non-coroutine contexts (e.g., Gradle tasks).
      *
      * @param path Path to the file
-     * @return SHA-256 hash prefixed with "sha256:"
+     * @return SHA-256 hash as BundleFileHash
      */
-    fun computeHashSync(path: Path): String {
+    fun computeHashSync(path: Path): BundleFileHash {
         HashingSource.sha256(FileSystem.SYSTEM.source(path.toOkioPath())).use { hashingSource ->
             hashingSource.buffer().readAll(blackholeSink())
-            return "sha256:" + hashingSource.hash.hex()
+            return BundleFileHash("sha256", hashingSource.hash.hex())
         }
     }
 
@@ -52,30 +53,22 @@ object HashVerifier {
      * Compute the SHA-256 hash of a byte array.
      *
      * @param data The data to hash
-     * @return SHA-256 hash prefixed with "sha256:"
+     * @return SHA-256 hash as BundleFileHash
      */
-    fun computeHash(data: ByteArray): String {
-        return "sha256:" + data.toByteString().sha256().hex()
+    fun computeHash(data: ByteArray): BundleFileHash {
+        return BundleFileHash("sha256", data.toByteString().sha256().hex())
     }
 
     /**
      * Verify that a file matches the expected hash.
      *
      * @param path Path to the file
-     * @param expectedHash Expected SHA-256 hash (with or without "sha256:" prefix)
+     * @param expectedHash Expected hash
      * @return true if the hash matches, false otherwise
      */
-    suspend fun verify(path: Path, expectedHash: String): Boolean {
+    suspend fun verify(path: Path, expectedHash: BundleFileHash): Boolean {
         if (!withContext(Dispatchers.IO) { Files.exists(path) }) return false
-        val actualHash = computeHash(path)
-        return normalizeHash(actualHash) == normalizeHash(expectedHash)
-    }
-
-    /**
-     * Normalize a hash by ensuring it has the "sha256:" prefix.
-     */
-    fun normalizeHash(hash: String): String {
-        return if (hash.startsWith("sha256:")) hash else "sha256:$hash"
+        return computeHash(path) == expectedHash
     }
 
     /**
@@ -86,7 +79,7 @@ object HashVerifier {
      * @return List of verification results
      */
     suspend fun verifyFilesConcurrently(
-        files: List<Pair<Path, String>>,
+        files: List<Pair<Path, BundleFileHash>>,
         parallelism: Int = 5
     ): List<HashVerificationResult> {
         val semaphore = Semaphore(parallelism)
@@ -102,7 +95,7 @@ object HashVerifier {
                             val actualHash = computeHash(path)
                             HashVerificationResult(
                                 path, expectedHash, actualHash,
-                                normalizeHash(actualHash) == normalizeHash(expectedHash)
+                                actualHash == expectedHash
                             )
                         }
                     }
@@ -118,10 +111,10 @@ object HashVerifier {
 data class HashVerificationResult(
     /** Path to the verified file */
     val path: Path,
-    /** Expected SHA-256 hash */
-    val expectedHash: String,
-    /** Actual SHA-256 hash (null if file missing) */
-    val actualHash: String?,
+    /** Expected hash */
+    val expectedHash: BundleFileHash,
+    /** Actual hash (null if file missing) */
+    val actualHash: BundleFileHash?,
     /** Whether verification succeeded */
     val success: Boolean
 )

@@ -249,7 +249,7 @@ class DownloadManager(
             val tempFile = storageManager.createTempFile("file")
 
             try {
-                val hash = file.hash.removePrefix("sha256:")
+                val hash = file.hash.value
                 downloadFile(
                     url = "$baseUrl/files/$hash",
                     destPath = tempFile,

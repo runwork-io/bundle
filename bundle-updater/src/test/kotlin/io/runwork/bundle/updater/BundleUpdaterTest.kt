@@ -2,6 +2,7 @@ package io.runwork.bundle.updater
 
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFile
+import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.updater.result.DownloadResult
 import kotlinx.coroutines.runBlocking
@@ -138,7 +139,7 @@ class BundleUpdaterTest {
             Files.write(filePath, content)
 
             // Also write to CAS (without sha256: prefix)
-            val casPath = casDir.resolve(file.hash.removePrefix("sha256:"))
+            val casPath = casDir.resolve(file.hash.value)
             Files.write(casPath, content)
         }
 
