@@ -3,6 +3,7 @@ package io.runwork.bundle.bootstrap
 import io.runwork.bundle.bootstrap.loader.BundleClassLoader
 import io.runwork.bundle.bootstrap.loader.BundleLoadException
 import io.runwork.bundle.bootstrap.loader.LoadedBundle
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Os
 import io.runwork.bundle.common.manifest.BundleManifest
@@ -18,7 +19,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
@@ -44,7 +44,7 @@ class BundleBootstrap(
     private val casDir = config.bundleDir.resolve("cas")
     private val contentStore = ContentAddressableStore(casDir)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = BundleJson.decodingJson
 
     /**
      * Phase 1: Validate the bundle.
@@ -78,6 +78,7 @@ class BundleBootstrap(
             return BundleValidationResult.NoBundleExists
         }
 
+        // Parse manifest first so corrupted JSON gets a descriptive error
         val manifest = try {
             json.decodeFromString<BundleManifest>(manifestJson)
         } catch (e: Exception) {
@@ -86,8 +87,8 @@ class BundleBootstrap(
 
         onProgress(BundleBootstrapProgress.VerifyingSignature)
 
-        // Verify signature
-        if (!signatureVerifier.verifyManifest(manifest)) {
+        // Verify signature against raw JSON (forward-compatible with unknown fields)
+        if (!signatureVerifier.verifyManifestJson(manifestJson)) {
             return BundleValidationResult.Failed("Manifest signature verification failed")
         }
 

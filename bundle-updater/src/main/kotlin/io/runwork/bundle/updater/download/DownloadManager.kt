@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater.download
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
@@ -12,7 +13,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -38,6 +38,29 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
+ * A fetched manifest preserving the raw JSON string.
+ *
+ * The raw JSON is preserved for forward-compatible signature verification:
+ * verifying against the original bytes avoids losing unknown fields that
+ * would be dropped during deserialization into [BundleManifest].
+ */
+internal class FetchedManifest(
+    val rawJson: String,
+    val manifest: BundleManifest,
+) {
+    companion object {
+        fun fromRawJson(rawJson: String): FetchedManifest {
+            val manifest = try {
+                BundleJson.decodingJson.decodeFromString<BundleManifest>(rawJson)
+            } catch (e: Exception) {
+                throw DownloadException("Failed to parse manifest", e)
+            }
+            return FetchedManifest(rawJson, manifest)
+        }
+    }
+}
+
+/**
  * Manages bundle downloads with OkHttp for HTTP/HTTPS URLs and direct file I/O for file:// URLs.
  *
  * Features:
@@ -59,8 +82,6 @@ class DownloadManager(
         .writeTimeout(Duration.ofSeconds(60))
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true }
-
     val contentStore: ContentAddressableStore get() = storageManager.contentStore
 
     private fun isFileUrl(url: String): Boolean = url.startsWith("file://")
@@ -68,10 +89,10 @@ class DownloadManager(
     /**
      * Fetch the latest manifest from the server.
      *
-     * @return The parsed bundle manifest
+     * @return The parsed bundle manifest alongside the raw JSON
      * @throws DownloadException if the fetch fails
      */
-    suspend fun fetchManifest(): BundleManifest {
+    internal suspend fun fetchManifest(): FetchedManifest {
         val url = "$baseUrl/manifest.json"
         return if (isFileUrl(url)) {
             fetchManifestFromFile(url)
@@ -80,7 +101,7 @@ class DownloadManager(
         }
     }
 
-    private suspend fun fetchManifestFromFile(url: String): BundleManifest = withContext(Dispatchers.IO) {
+    private suspend fun fetchManifestFromFile(url: String): FetchedManifest = withContext(Dispatchers.IO) {
         val path = try {
             Paths.get(URI(url))
         } catch (e: Exception) {
@@ -97,14 +118,10 @@ class DownloadManager(
             throw DownloadException("Failed to read file: $path", e)
         }
 
-        try {
-            json.decodeFromString<BundleManifest>(body)
-        } catch (e: Exception) {
-            throw DownloadException("Failed to parse manifest", e)
-        }
+        FetchedManifest.fromRawJson(body)
     }
 
-    private suspend fun fetchManifestFromHttp(url: String): BundleManifest {
+    private suspend fun fetchManifestFromHttp(url: String): FetchedManifest {
         val request = Request.Builder()
             .url(url)
             .get()
@@ -125,11 +142,7 @@ class DownloadManager(
                 it.body?.string()
             } ?: throw DownloadException("Empty response from server")
 
-            try {
-                json.decodeFromString<BundleManifest>(body)
-            } catch (e: Exception) {
-                throw DownloadException("Failed to parse manifest", e)
-            }
+            FetchedManifest.fromRawJson(body)
         }
     }
 

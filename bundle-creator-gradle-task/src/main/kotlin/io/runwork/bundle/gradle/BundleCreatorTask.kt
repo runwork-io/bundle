@@ -1,12 +1,12 @@
 package io.runwork.bundle.gradle
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
@@ -140,8 +140,6 @@ abstract class BundleCreatorTask : DefaultTask() {
     abstract val privateKeyFile: RegularFileProperty
 
     companion object {
-        private val prettyJson = Json { prettyPrint = true }
-
         /**
          * Generate a new Ed25519 key pair.
          *
@@ -285,7 +283,11 @@ abstract class BundleCreatorTask : DefaultTask() {
 
         // Write manifest
         val manifestFile = File(outputDir, "manifest.json")
-        manifestFile.writeText(prettyJson.encodeToString(signedManifest))
+        // Use the same compact JSON configuration used for signing so that the
+        // distribution manifest is byte-identical to the signed form plus the
+        // signature field. This enables forward-compatible signature verification
+        // via string manipulation on older clients.
+        manifestFile.writeText(BundleJson.signingJson.encodeToString(signedManifest))
 
         logger.lifecycle("")
         logger.lifecycle("Bundle created successfully!")

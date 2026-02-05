@@ -1,5 +1,6 @@
 package samples
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.updater.BundleUpdater
@@ -9,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.hours
 
@@ -21,8 +21,7 @@ import kotlin.time.Duration.Companion.hours
  */
 fun main(args: Array<String>) {
     // Parse config passed from shell via args[0]
-    val json = Json { ignoreUnknownKeys = true }
-    val launchConfig = json.decodeFromString<BundleLaunchConfig>(args[0])
+    val launchConfig = BundleJson.decodingJson.decodeFromString<BundleLaunchConfig>(args[0])
 
     println("Bundle started. Build: ${launchConfig.currentBuildNumber}")
 

@@ -27,9 +27,57 @@ class SignatureVerifier(
     }
 
     /**
-     * Verify a manifest's signature.
+     * Verify a manifest's signature against the raw JSON string.
      *
-     * The signature is verified against the manifest JSON with the signature field set to empty.
+     * This approach is forward-compatible: if a future creator adds new fields to the
+     * manifest, older clients can still verify the signature because they verify against
+     * the original JSON bytes rather than round-tripping through the Kotlin data class
+     * (which would drop unknown fields).
+     *
+     * The fast path handles compact JSON where the signature is the last field:
+     * `{...,"signature":"ed25519:ABC=="}`
+     * It strips the signature field via string manipulation and verifies against the rest.
+     *
+     * The fallback handles legacy pretty-printed manifests (no unknown keys) by
+     * round-tripping through the Kotlin data class.
+     *
+     * @param rawJson The raw manifest JSON string as read from disk or network
+     * @return true if the signature is valid, false otherwise
+     */
+    fun verifyManifestJson(rawJson: String): Boolean {
+        // Fast path: compact JSON with signature as last field
+        val sigFieldPrefix = ",\"signature\":\""
+        val sigFieldStart = rawJson.lastIndexOf(sigFieldPrefix)
+        if (sigFieldStart != -1 && rawJson.endsWith("\"}")) {
+            val signatureValue = rawJson.substring(
+                sigFieldStart + sigFieldPrefix.length,
+                rawJson.length - 2 // strip trailing "}
+            )
+            val signedJson = rawJson.substring(0, sigFieldStart) + "}"
+            if (verify(signedJson.toByteArray(Charsets.UTF_8), signatureValue)) {
+                return true
+            }
+            // Fast path didn't verify (e.g., JSON was written with different encoding
+            // settings than used for signing). Fall through to round-trip fallback.
+        }
+
+        // Fallback: round-trip through Kotlin data class.
+        // Works for legacy pretty-printed manifests and compact manifests written with
+        // different JSON settings, as long as all keys are known to BundleManifest.
+        return try {
+            val manifest = BundleJson.decodingJson.decodeFromString<BundleManifest>(rawJson)
+            verifyManifest(manifest)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Verify a manifest's signature by round-tripping through the Kotlin data class.
+     *
+     * Note: This is NOT forward-compatible with unknown fields. Prefer [verifyManifestJson]
+     * for verification of manifests that may contain fields not yet in this client's
+     * [BundleManifest] data class.
      *
      * @param manifest The manifest to verify
      * @return true if the signature is valid, false otherwise

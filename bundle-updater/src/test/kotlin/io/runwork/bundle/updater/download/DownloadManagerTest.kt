@@ -71,12 +71,13 @@ class DownloadManagerTest {
                 .setHeader("Content-Type", "application/json")
         )
 
-        val result = downloadManager.fetchManifest()
+        val fetched = downloadManager.fetchManifest()
 
-        assertEquals(42, result.buildNumber)
-        assertTrue(result.supportsPlatform(platform))
-        assertEquals(1, result.files.size)
-        assertEquals("app.jar", result.files[0].path)
+        assertEquals(42, fetched.manifest.buildNumber)
+        assertTrue(fetched.manifest.supportsPlatform(platform))
+        assertEquals(1, fetched.manifest.files.size)
+        assertEquals("app.jar", fetched.manifest.files[0].path)
+        assertTrue(fetched.rawJson.contains("\"buildNumber\":42") || fetched.rawJson.contains("\"buildNumber\": 42"))
     }
 
     @Test
@@ -389,12 +390,12 @@ class DownloadManagerTest {
 
         val fileDownloadManager = DownloadManager(baseUrl, storageManager, platform)
 
-        val result = fileDownloadManager.fetchManifest()
+        val fetched = fileDownloadManager.fetchManifest()
 
-        assertEquals(42, result.buildNumber)
-        assertTrue(result.supportsPlatform(platform))
-        assertEquals(1, result.files.size)
-        assertEquals("app.jar", result.files[0].path)
+        assertEquals(42, fetched.manifest.buildNumber)
+        assertTrue(fetched.manifest.supportsPlatform(platform))
+        assertEquals(1, fetched.manifest.files.size)
+        assertEquals("app.jar", fetched.manifest.files[0].path)
     }
 
     @Test

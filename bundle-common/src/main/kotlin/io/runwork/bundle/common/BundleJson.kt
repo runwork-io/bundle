@@ -29,4 +29,15 @@ object BundleJson {
         prettyPrint = false
         explicitNulls = false
     }
+
+    /**
+     * Json instance used for decoding manifests (and other bundle types).
+     *
+     * Configuration rationale:
+     * - [ignoreUnknownKeys] = true — allows older clients to decode manifests
+     *   produced by newer creators that may contain additional fields.
+     */
+    val decodingJson: Json = Json {
+        ignoreUnknownKeys = true
+    }
 }

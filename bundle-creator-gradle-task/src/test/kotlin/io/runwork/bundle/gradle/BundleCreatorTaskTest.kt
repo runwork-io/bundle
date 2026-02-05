@@ -1,10 +1,10 @@
 package io.runwork.bundle.gradle
 
+import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.creator.BundleManifestSigner
-import kotlinx.serialization.json.Json
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import java.io.File
@@ -28,7 +28,7 @@ class BundleCreatorTaskTest {
     private lateinit var pluginClasspath: List<File>
     private lateinit var classpathString: String
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = BundleJson.decodingJson
 
     @BeforeTest
     fun setUp() {
