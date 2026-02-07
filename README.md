@@ -11,7 +11,16 @@ A Kotlin library for managing versioned, signed software bundles with content-ad
 - **Ed25519 Signatures**: Manifest integrity verified with Ed25519 cryptography
 - **Isolated Classloaders**: Bundles load into custom classloaders for isolation
 - **Cross-Platform**: Supports macOS, Linux, and Windows
-- **Type-Safe Platform API**: Platform detection via `Os` and `Architecture` enums
+- **Type-Safe Platform API**: Platform detection via `Os` and `Arch` enums
+
+## Architecture
+
+Bundle uses a **shell + bundle** architecture:
+
+- **Shell**: A thin native launcher that validates, downloads, and launches bundles. It embeds `bundle-bootstrap` and `bundle-updater`.
+- **Bundle**: Your application code, loaded into an isolated classloader. It can use `bundle-updater` for background self-updates and `bundle-resources` for platform-aware resource resolution.
+
+On startup, the shell validates the current bundle (or downloads one if none exists), then launches it. Once running, the bundle can check for updates in the background and signal the shell to restart with the new version.
 
 ## Artifacts
 
@@ -24,6 +33,7 @@ All artifacts are published to Maven Central under the `io.runwork` group:
 | `bundle-updater` | Download bundles (initial + updates) | Shell application AND inside bundle |
 | `bundle-creator` | Create and sign bundles (library) | CI pipelines |
 | `bundle-creator-gradle-task` | Gradle task for bundle creation | Gradle-based CI pipelines |
+| `bundle-resources` | Platform-aware resource resolution | Inside bundle (optional) |
 
 ### Dependency Setup
 
@@ -35,8 +45,9 @@ dependencies {
     implementation("io.runwork:bundle-bootstrap:<version>")
     implementation("io.runwork:bundle-updater:<version>")
 
-    // For applications inside bundles (self-update capability)
+    // For applications inside bundles (self-update + resource resolution)
     implementation("io.runwork:bundle-updater:<version>")
+    implementation("io.runwork:bundle-resources:<version>")
 
     // For CI/build scripts (creating bundles programmatically)
     implementation("io.runwork:bundle-creator:<version>")
@@ -64,16 +75,16 @@ Os.WINDOWS  // Windows
 Os.LINUX    // Linux
 
 // Architecture options
-Architecture.ARM64   // Apple Silicon, ARM64
-Architecture.X86_64  // Intel/AMD 64-bit
+Arch.ARM64  // Apple Silicon, ARM64
+Arch.X64    // Intel/AMD 64-bit
 
 // Combine them or use auto-detection
-val platform = Platform(Os.MACOS, Architecture.ARM64)
+val platform = Platform(Os.MACOS, Arch.ARM64)
 val currentPlatform = Platform.current  // Detects from system properties
 
 // Convert to/from string format (for manifests)
 val platformStr = platform.toString()          // "macos-arm64"
-val parsed = Platform.fromString("linux-arm64") // Platform(Os.LINUX, Architecture.ARM64)
+val parsed = Platform.fromString("linux-arm64") // Platform(Os.LINUX, Arch.ARM64)
 ```
 
 ## Usage
@@ -81,27 +92,18 @@ val parsed = Platform.fromString("linux-arm64") // Platform(Os.LINUX, Architectu
 ### Shell Application: Validate and Launch Bundles
 
 ```kotlin
-// Using appId for platform-specific default storage path
 val bootstrapConfig = BundleBootstrapConfig(
-    appId = "com.example.myapp",
-    baseUrl = "https://cdn.example.com/bundles",
-    publicKey = "your-ed25519-public-key",
+    appDataDir = Path.of(System.getProperty("user.home"), ".myapp"),
+    bundleSubdirectory = "bundle",
+    baseUrl = "https://updates.myapp.com",
+    publicKey = "MCowBQYDK2VwAyEA...", // Ed25519 public key (Base64)
     shellVersion = 1,
-    mainClass = "com.example.Main",
-)
-
-// Or specify an explicit storage path
-val bootstrapConfig = BundleBootstrapConfig(
-    appDataDir = Path("/custom/storage/path"),
-    baseUrl = "https://cdn.example.com/bundles",
-    publicKey = "your-ed25519-public-key",
-    shellVersion = 1,
-    mainClass = "com.example.Main",
+    platform = Platform.current,
+    mainClass = "com.myapp.Main",
 )
 
 val bootstrap = BundleBootstrap(bootstrapConfig)
 
-// Validate and launch the bundle
 when (val result = bootstrap.validate()) {
     is BundleValidationResult.Valid -> {
         val loadedBundle = bootstrap.launch(result)
@@ -110,22 +112,109 @@ when (val result = bootstrap.validate()) {
     is BundleValidationResult.NoBundleExists -> {
         // Download initial bundle using BundleUpdater
         val updaterConfig = BundleUpdaterConfig(
-            appId = "com.example.myapp",
-            baseUrl = "https://cdn.example.com/bundles",
+            appDataDir = Path.of(System.getProperty("user.home"), ".myapp"),
+            bundleSubdirectory = bootstrapConfig.bundleSubdirectory,
+            baseUrl = "https://updates.myapp.com",
             publicKey = bootstrapConfig.publicKey,
-            currentBuildNumber = 0
+            currentBuildNumber = 0,
+            platform = bootstrapConfig.platform,
         )
         val updater = BundleUpdater(updaterConfig)
 
         when (val downloadResult = updater.downloadLatest { progress ->
-            println("Downloaded ${progress.bytesDownloaded} / ${progress.totalBytes}")
+            println("Downloading: ${progress.bytesDownloaded}/${progress.totalBytes} (${progress.percentCompleteInt}%)")
         }) {
-            is DownloadResult.Success -> println("Downloaded build ${downloadResult.buildNumber}")
+            is DownloadResult.Success -> {
+                println("Downloaded build ${downloadResult.buildNumber}")
+                // Re-validate and launch
+                when (val validResult = bootstrap.validate()) {
+                    is BundleValidationResult.Valid -> {
+                        val loadedBundle = bootstrap.launch(validResult)
+                        println("Bundle launched: ${loadedBundle.manifest.buildNumber}")
+                    }
+                    else -> println("Validation failed after download: $validResult")
+                }
+            }
             is DownloadResult.Failure -> println("Download failed: ${downloadResult.error}")
+            is DownloadResult.AlreadyUpToDate -> println("Already up to date")
+            is DownloadResult.Cancelled -> println("Download cancelled")
         }
         updater.close()
     }
+    is BundleValidationResult.Failed -> {
+        println("Bundle validation failed: ${result.reason}")
+        result.failures.forEach { failure ->
+            println("  - ${failure.path}: ${failure.reason}")
+        }
+    }
+    is BundleValidationResult.ShellUpdateRequired -> {
+        println("Shell update required. Current: ${result.currentVersion}, Required: ${result.requiredVersion}")
+        result.updateUrl?.let { println("  Download from: $it") }
+    }
+    is BundleValidationResult.NetworkError -> {
+        println("Network error: ${result.message}")
+    }
 }
+```
+
+### Bundle Self-Update (Inside Running Bundle)
+
+Once your bundle is running, it can check for updates in the background:
+
+```kotlin
+val launchConfig = BundleJson.decodingJson.decodeFromString<BundleLaunchConfig>(args[0])
+
+val config = BundleUpdaterConfig(
+    appDataDir = Path.of(launchConfig.appDataDir),
+    bundleSubdirectory = launchConfig.bundleSubdirectory,
+    baseUrl = launchConfig.baseUrl,
+    publicKey = launchConfig.publicKey,
+    currentBuildNumber = launchConfig.currentBuildNumber,
+    platform = Platform.fromString(launchConfig.platform),
+    checkInterval = 6.hours,
+)
+
+val updater = BundleUpdater(config)
+
+// Collect update events from the Flow
+updater.runInBackground().collect { event ->
+    when (event) {
+        BundleUpdateEvent.Checking -> println("Checking for updates...")
+        BundleUpdateEvent.UpToDate -> println("Already running latest version")
+        is BundleUpdateEvent.UpdateAvailable -> {
+            println("Update available: ${event.info.currentBuildNumber} -> ${event.info.newBuildNumber}")
+        }
+        is BundleUpdateEvent.Downloading -> {
+            println("Downloading: ${event.progress.percentCompleteInt}%")
+        }
+        is BundleUpdateEvent.UpdateReady -> {
+            println("Update ready! Build ${event.newBuildNumber}")
+            // Prompt user to restart, or auto-restart
+        }
+        is BundleUpdateEvent.Error -> println("Update error: ${event.error.message}")
+        is BundleUpdateEvent.CleanupComplete -> {
+            println("Cleaned up ${event.result.versionsRemoved.size} old versions")
+        }
+    }
+}
+```
+
+### Platform-Specific Resources (Inside Bundle)
+
+`BundleResources` resolves files from the `resources/` folder with platform priority:
+
+```kotlin
+val launchConfig = BundleJson.decodingJson.decodeFromString<BundleLaunchConfig>(args[0])
+BundleResources.init(launchConfig)
+
+// Resolve with platform fallback:
+//   1. resources/{os}-{arch}/path  (e.g., resources/macos-arm64/config.json)
+//   2. resources/{os}/path         (e.g., resources/macos/config.json)
+//   3. resources/common/path       (e.g., resources/common/config.json)
+val configPath = BundleResources.resolveOrThrow("config/settings.json")
+
+// Load native libraries (auto-resolves platform naming: .dylib / .dll / .so)
+BundleResources.loadNativeLibrary("whisper")
 ```
 
 ### Creating Bundles with Gradle Task
@@ -147,6 +236,7 @@ tasks.register<BundleCreatorTask>("createBundle") {
     outputDirectory.set(layout.buildDirectory.dir("bundle"))
     mainClass.set("com.myapp.MainKt")
     buildNumber.set(System.currentTimeMillis())  // Or use CI build number
+    platforms.set(listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64"))
     privateKey.set(providers.environmentVariable("BUNDLE_PRIVATE_KEY"))
 
     dependsOn("installDist")
@@ -167,9 +257,9 @@ tasks.register("generateBundleKeys") {
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
 | `inputDirectory` | `DirectoryProperty` | Yes | - | Source files to bundle |
-| `outputDirectory` | `DirectoryProperty` | Yes | - | Output for manifest.json, bundle.zip, files/ |
+| `outputDirectory` | `DirectoryProperty` | Yes | - | Output for manifest.json, zips/, files/ |
 | `mainClass` | `Property<String>` | Yes | - | Fully qualified main class |
-| `platform` | `Property<String>` | No | Auto-detect | Platform ID (e.g., "macos-arm64") |
+| `platforms` | `ListProperty<String>` | Yes | - | Target platforms (e.g., "macos-arm64", "windows-x64") |
 | `buildNumber` | `Property<Long>` | Yes | - | Build number (set by CI) |
 | `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
 | `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
@@ -188,22 +278,28 @@ import io.runwork.bundle.creator.BundlePackager
 val (privateKey, publicKey) = BundleManifestSigner.generateKeyPair()
 val signer = BundleManifestSigner.fromBase64(privateKey)
 
-// Build the bundle
-val packager = BundlePackager()
 val builder = BundleManifestBuilder()
+val packager = BundlePackager()
 
-val bundleFiles = builder.collectFiles(inputDir)
-val bundleHash = packager.packageBundle(inputDir, outputDir, bundleFiles)
+// Specify target platforms
+val targetPlatforms = listOf("macos-arm64", "macos-x64", "windows-x64", "linux-x64")
 
+// Collect files with platform constraints from resources/ folder structure
+val bundleFiles = builder.collectFilesWithPlatformConstraints(inputDir)
+
+// Package per-platform zips (deduplicated by content fingerprint) and individual files
+val zips = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
+
+// Build unsigned manifest
 val manifest = builder.build(
     inputDir = inputDir,
-    platform = "macos-arm64",
     buildNumber = System.currentTimeMillis(),
     mainClass = "com.example.MainKt",
     minShellVersion = 1,
-    bundleHash = bundleHash,
+    zips = zips,
 )
 
+// Sign and write
 val signedManifest = signer.signManifest(manifest)
 ```
 
@@ -213,8 +309,10 @@ When you create a bundle, it produces:
 
 ```
 output/
-├── manifest.json    # Signed manifest with file hashes and metadata
-├── bundle.zip       # Full bundle archive for initial downloads
+├── manifest.json    # Signed manifest with file hashes and per-platform bundle info
+├── zips/            # Per-platform bundle archives (deduplicated by content fingerprint)
+│   ├── {fingerprint}.zip   # Platforms with identical content share the same zip
+│   └── {fingerprint}.zip
 └── files/           # Individual files named by SHA-256 hash
     ├── abc123...    # For incremental updates
     └── def456...
