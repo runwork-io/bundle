@@ -119,7 +119,7 @@ class BundlePackagerTest {
         assertTrue(zipName.endsWith(".zip"), "Zip name should end with '.zip'")
 
         // Extract fingerprint part
-        val fingerprint = zipName.removePrefix("zips/").removeSuffix(".zip")
+        val fingerprint = zipName.removePrefix("zips/bundle-").removeSuffix(".zip")
         assertEquals(8, fingerprint.length, "Content fingerprint should be 8 characters")
 
         // Fingerprint should be hex (lowercase)

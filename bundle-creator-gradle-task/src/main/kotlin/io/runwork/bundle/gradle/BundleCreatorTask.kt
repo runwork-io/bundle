@@ -3,9 +3,9 @@ package io.runwork.bundle.gradle
 import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.manifest.BundleManifest
-import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.creator.BundleManifestBuilder
 import io.runwork.bundle.creator.BundleManifestSigner
+import io.runwork.bundle.creator.BundlePackager
 import kotlinx.serialization.encodeToString
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -20,8 +20,6 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import java.io.File
 import java.time.Instant
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 /**
  * Gradle task for creating signed multi-platform bundles.
@@ -210,60 +208,10 @@ abstract class BundleCreatorTask : DefaultTask() {
         logger.lifecycle("  Platforms: ${targetPlatforms.joinToString(", ")}")
         logger.lifecycle("  Total files: ${bundleFiles.size}")
 
-        // Create output directories
+        // Package bundle: creates files/ and zips/ directories, returns platform → PlatformBundle map
         outputDir.mkdirs()
-        val filesDir = File(outputDir, "files")
-        filesDir.mkdirs()
-        val zipsDir = File(outputDir, "zips")
-        zipsDir.mkdirs()
-
-        // Copy all files to files/ directory (content-addressable)
-        for (bundleFile in bundleFiles) {
-            val sourceFile = File(inputDir, bundleFile.path)
-            val hashFileName = bundleFile.hash.hex
-            val destFile = File(filesDir, hashFileName)
-
-            if (!destFile.exists()) {
-                sourceFile.copyTo(destFile)
-            }
-        }
-
-        // Group platforms by content fingerprint to deduplicate identical zips
-        val platformGroups = manifestBuilder.groupPlatformsByContent(bundleFiles, targetPlatforms)
-        val platformBundleZips = mutableMapOf<String, String>()
-
-        for ((fingerprint, platforms) in platformGroups) {
-            // Content-addressable zip filename
-            val zipFileName = "bundle-$fingerprint.zip"
-            val bundleZip = File(outputDir, "zips/$zipFileName")
-
-            // Get files for this content (all platforms in group have same files)
-            val platform = Platform.fromString(platforms.first())
-            val platformFiles = bundleFiles.filter { it.appliesTo(platform) }
-
-            // Create the zip once (deduplicate by hash so identical content is stored once)
-            val files = platformFiles.distinctBy { it.hash }.map { bf ->
-                bf.hash.hex to File(inputDir, bf.path)
-            }
-            createBundleZip(bundleZip, files)
-
-            // Point all platforms in the group to this zip
-            for (platformId in platforms) {
-                platformBundleZips[platformId] = "zips/$zipFileName"
-            }
-
-            logger.lifecycle("  Created $zipFileName (${platformFiles.size} files) for: ${platforms.joinToString(", ")}")
-        }
-
-        // Build platform bundles map with actual zip file sizes
-        val zipsMap = targetPlatforms.associateWith { platformId ->
-            val zipFileName = platformBundleZips[platformId]!!
-            val zipFile = File(outputDir, zipFileName)
-            PlatformBundle(
-                zip = zipFileName,
-                size = zipFile.length(),
-            )
-        }
+        val packager = BundlePackager()
+        val zipsMap = packager.packageBundle(inputDir, outputDir, bundleFiles, targetPlatforms)
 
         // Create unsigned manifest
         val manifestWithoutSig = BundleManifest(
@@ -297,11 +245,11 @@ abstract class BundleCreatorTask : DefaultTask() {
         logger.lifecycle("Files created:")
         logger.lifecycle("  manifest.json - Signed multi-platform manifest")
         // List unique zip files
-        val uniqueZips = platformBundleZips.entries.groupBy({ it.value }, { it.key })
-        for ((zipName, platformsForZip) in uniqueZips) {
+        val uniqueZips = zipsMap.entries.groupBy({ it.value.zip }, { it.key })
+        for ((zipPath, platformsForZip) in uniqueZips) {
             val size = zipsMap[platformsForZip.first()]!!.size
             val sizeMb = size / 1024 / 1024
-            logger.lifecycle("  $zipName - $sizeMb MB (${platformsForZip.joinToString(", ")})")
+            logger.lifecycle("  $zipPath - $sizeMb MB (${platformsForZip.joinToString(", ")})")
         }
         logger.lifecycle("  files/ - Individual files by hash (for incremental updates)")
     }
@@ -324,16 +272,6 @@ abstract class BundleCreatorTask : DefaultTask() {
 
             else -> {
                 throw GradleException("One of privateKey, privateKeyEnvVar, or privateKeyFile must be set")
-            }
-        }
-    }
-
-    private fun createBundleZip(output: File, files: List<Pair<String, File>>) {
-        ZipOutputStream(output.outputStream()).use { zip ->
-            for ((relativePath, file) in files) {
-                zip.putNextEntry(ZipEntry(relativePath))
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
             }
         }
     }

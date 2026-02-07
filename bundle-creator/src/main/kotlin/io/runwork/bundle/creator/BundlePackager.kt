@@ -59,7 +59,7 @@ class BundlePackager {
 
         for ((fingerprint, platforms) in platformGroups) {
             // Content-addressable zip filename
-            val zipFileName = "$fingerprint.zip"
+            val zipFileName = "bundle-$fingerprint.zip"
             val bundleZip = File(zipsDir, zipFileName)
 
             // Get files for this content (all platforms in group have same files)
