@@ -28,17 +28,19 @@ class CleanupManager(
      * @return Cleanup result with statistics
      */
     suspend fun cleanup(currentManifest: BundleManifest): CleanupResult {
-        return storageManager.withStorageLock {
-            doCleanup(currentManifest)
+        return storageManager.withWriteScope { scope ->
+            doCleanup(scope, currentManifest)
         }
     }
 
-    private suspend fun doCleanup(currentManifest: BundleManifest): CleanupResult {
+    private suspend fun doCleanup(
+        scope: StorageManager.StorageManagerWriteScope,
+        currentManifest: BundleManifest,
+    ): CleanupResult {
         val currentBuild = currentManifest.buildNumber
 
         // 1. Clear all temp files (always safe when up-to-date)
-        // Use unlocked version since we already hold the lock via withStorageLock
-        storageManager.cleanupTempUnlocked()
+        scope.cleanupTemp()
 
         // 2. Delete old version directories (keep only current)
         val allVersions = storageManager.listVersions()
@@ -47,8 +49,7 @@ class CleanupManager(
 
         for (version in versionsToDelete) {
             try {
-                // Use unlocked version since we already hold the lock via withStorageLock
-                storageManager.deleteVersionDirectoryUnlocked(version)
+                scope.deleteVersionDirectory(version)
                 deletedVersions.add(version)
             } catch (e: Exception) {
                 // Log but continue - don't fail cleanup for one bad version

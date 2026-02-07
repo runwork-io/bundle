@@ -97,7 +97,9 @@ class StorageManagerTest {
             buildNumber = 42
         )
 
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         // Verify version directory exists with file
         val versionDir = storageManager.getVersionPath(42)
@@ -125,7 +127,9 @@ class StorageManagerTest {
             buildNumber = 42
         )
 
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         val versionDir = storageManager.getVersionPath(42)
         assertTrue(Files.exists(versionDir.resolve("natives/macos/libfoo.dylib")))
@@ -146,8 +150,10 @@ class StorageManagerTest {
         )
 
         // Call prepareVersion twice - should not throw
-        storageManager.prepareVersion(manifest, platform)
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+            scope.prepareVersion(manifest, platform)
+        }
 
         val versionDir = storageManager.getVersionPath(42)
         assertTrue(Files.exists(versionDir.resolve("file.txt")))
@@ -167,7 +173,9 @@ class StorageManagerTest {
         )
 
         assertFailsWith<IllegalStateException> {
-            storageManager.prepareVersion(manifest, platform)
+            storageManager.withWriteScope { scope ->
+                scope.prepareVersion(manifest, platform)
+            }
         }
     }
 
@@ -179,7 +187,9 @@ class StorageManagerTest {
     @Test
     fun getCurrentBuildNumber_returnsBuildNumberFromManifest() = runTest {
         val manifestJson = """{"schemaVersion":1,"buildNumber":42}"""
-        storageManager.saveManifest(manifestJson)
+        storageManager.withWriteScope { scope ->
+            scope.saveManifest(manifestJson)
+        }
 
         assertEquals(42, storageManager.getCurrentBuildNumber())
     }
@@ -205,7 +215,9 @@ class StorageManagerTest {
 
         assertTrue(Files.exists(versionDir))
 
-        storageManager.deleteVersionDirectory(42)
+        storageManager.withWriteScope { scope ->
+            scope.deleteVersionDirectory(42)
+        }
 
         assertFalse(Files.exists(versionDir))
     }
@@ -223,7 +235,9 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         val failures = storageManager.verifyVersion(manifest, platform)
 
@@ -243,7 +257,9 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         // Tamper with the file
         val versionDir = storageManager.getVersionPath(42)
@@ -270,7 +286,9 @@ class StorageManagerTest {
             ),
             buildNumber = 42
         )
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         // Delete the file
         val versionDir = storageManager.getVersionPath(42)
@@ -288,7 +306,9 @@ class StorageManagerTest {
     fun saveManifest_and_loadManifest_roundTrip() = runTest {
         val manifestJson = """{"schemaVersion":1,"buildNumber":42}"""
 
-        storageManager.saveManifest(manifestJson)
+        storageManager.withWriteScope { scope ->
+            scope.saveManifest(manifestJson)
+        }
         val loaded = storageManager.loadManifest()
 
         assertEquals(manifestJson, loaded)
@@ -317,7 +337,9 @@ class StorageManagerTest {
         assertTrue(Files.exists(temp1))
         assertTrue(Files.exists(temp2))
 
-        storageManager.cleanupTemp()
+        storageManager.withWriteScope { scope ->
+            scope.cleanupTemp()
+        }
 
         assertFalse(Files.exists(temp1))
         assertFalse(Files.exists(temp2))

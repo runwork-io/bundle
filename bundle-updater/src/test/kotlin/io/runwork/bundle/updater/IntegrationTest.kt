@@ -123,8 +123,10 @@ class IntegrationTest {
         assertIs<DownloadResult.Success>(downloadResult)
 
         // Manually finalize: prepare version and save manifest
-        storageManager.prepareVersion(manifest, platform)
-        storageManager.saveManifest(json.encodeToString(manifest))
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+            scope.saveManifest(json.encodeToString(manifest))
+        }
 
         // Step 3: Validate succeeds after download
         val validResult = bootstrap.validate()
@@ -219,8 +221,10 @@ class IntegrationTest {
         assertIs<DownloadResult.Success>(downloadResult)
 
         // Step 3: Prepare new version
-        storageManager.prepareVersion(fetched.manifest, platform)
-        storageManager.saveManifest(fetched.rawJson)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(fetched.manifest, platform)
+            scope.saveManifest(fetched.rawJson)
+        }
 
         // Verify new version is prepared
         assertTrue(Files.exists(appDataDir.resolve("versions/200/app.jar")))
@@ -517,7 +521,9 @@ class IntegrationTest {
         assertEquals("/files/$newHash", request.path)
 
         // Finalize: prepare version
-        storageManager.prepareVersion(manifest, platform)
+        storageManager.withWriteScope { scope ->
+            scope.prepareVersion(manifest, platform)
+        }
 
         // Verify both files are in version directory
         assertTrue(Files.exists(appDataDir.resolve("versions/100/existing.jar")))
