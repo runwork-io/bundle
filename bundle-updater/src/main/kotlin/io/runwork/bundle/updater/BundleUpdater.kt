@@ -150,13 +150,13 @@ class BundleUpdater(
     }
 
     private suspend fun finalizeUpdate(manifest: BundleManifest, rawJson: String) {
-        // Prepare version directory (hard links from CAS for this platform's files)
-        // Note: prepareVersion and saveManifest each acquire the storage lock internally,
-        // so we don't wrap them in an outer lock to avoid deadlock (Mutex is not reentrant).
-        storageManager.prepareVersion(manifest, config.platform)
-        // Save the raw JSON directly to preserve unknown fields for forward-compatible
-        // signature verification on subsequent bootstrap validations.
-        storageManager.saveManifest(rawJson)
+        storageManager.withWriteScope { scope ->
+            // Prepare version directory (hard links from CAS for this platform's files)
+            scope.prepareVersion(manifest, config.platform)
+            // Save the raw JSON directly to preserve unknown fields for forward-compatible
+            // signature verification on subsequent bootstrap validations.
+            scope.saveManifest(rawJson)
+        }
     }
 
     private suspend fun ProducerScope<BundleUpdateEvent>.checkAndDownloadUpdate() {

@@ -28,7 +28,8 @@ import java.nio.file.attribute.BasicFileAttributes
  * - Current version tracking
  * - Thread-safe storage operations via mutex
  *
- * All write operations are protected by a mutex to prevent concurrent modifications.
+ * Write operations are only accessible within a [StorageManagerWriteScope], obtained via [withWriteScope].
+ * This makes it impossible to accidentally call write methods without holding the lock.
  */
 class StorageManager(
     private val bundleDir: Path
@@ -41,12 +42,119 @@ class StorageManager(
     /** Mutex protecting all write operations to storage */
     private val storageMutex = Mutex()
 
+    private val writeScope = StorageManagerWriteScope()
+
     /**
-     * Execute a block with the storage lock held.
-     * Use this for operations that need to atomically read and write storage.
+     * Execute a block with the storage lock held, providing a [StorageManagerWriteScope]
+     * that exposes write operations.
+     *
+     * All write operations (prepareVersion, saveManifest, deleteVersionDirectory, cleanupTemp)
+     * are only accessible through the scope parameter, ensuring the lock is always held.
      */
-    suspend fun <T> withStorageLock(block: suspend () -> T): T {
-        return storageMutex.withLock { block() }
+    suspend fun <T> withWriteScope(block: suspend (StorageManagerWriteScope) -> T): T {
+        return storageMutex.withLock {
+            block(writeScope)
+        }
+    }
+
+    /**
+     * Scope that provides access to write operations on storage.
+     * Only obtainable via [withWriteScope], which guarantees the storage mutex is held.
+     */
+    inner class StorageManagerWriteScope internal constructor() {
+
+        /**
+         * Prepare a version directory by linking files from CAS.
+         *
+         * For each file in the manifest that applies to the given platform:
+         * 1. Look up the file in CAS by hash
+         * 2. Create parent directories in the version directory
+         * 3. Create a link from version/{path} to CAS/{hash}
+         *    - On macOS/Linux: symlink (preferred as they don't modify the CAS file's inode)
+         *    - On Windows: hard link (symlinks require elevated permissions)
+         *
+         * This operation is idempotent - if the version directory already exists with valid links,
+         * those files are skipped. Invalid or broken links are recreated.
+         *
+         * Completeness is guaranteed by the caller saving manifest.json after this method returns.
+         * If manifest.json exists and points to version N, that version is fully prepared.
+         *
+         * @param manifest The bundle manifest describing all files
+         * @param platform The target platform to filter files for
+         * @throws IllegalStateException if a required file is missing from CAS or linking fails
+         */
+        suspend fun prepareVersion(manifest: BundleManifest, platform: Platform) {
+            ensureDirectoriesExist()
+            val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
+
+            withContext(Dispatchers.IO) {
+                Files.createDirectories(versionDir)
+            }
+
+            // Only prepare files that apply to this platform
+            val platformFiles = manifest.filesForPlatform(platform)
+            for (file in platformFiles) {
+                val sourcePath = contentStore.getPath(file.hash)
+                    ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
+
+                val destPath = versionDir.resolve(file.path)
+
+                // Skip if file already exists AND is a valid link to the CAS file
+                val needsLink = withContext(Dispatchers.IO) {
+                    !Files.exists(destPath) || !isSameFile(destPath, sourcePath)
+                }
+                if (!needsLink) continue
+
+                withContext(Dispatchers.IO) {
+                    Files.createDirectories(destPath.parent)
+                    Files.deleteIfExists(destPath)
+                    createLink(destPath, sourcePath)
+                }
+            }
+        }
+
+        /**
+         * Save the current manifest to disk.
+         */
+        suspend fun saveManifest(manifestJson: String) {
+            withContext(Dispatchers.IO) {
+                Files.createDirectories(bundleDir)
+                Files.writeString(manifestPath, manifestJson)
+            }
+        }
+
+        /**
+         * Delete a version directory and all its contents.
+         */
+        suspend fun deleteVersionDirectory(buildNumber: Long) {
+            withContext(Dispatchers.IO) {
+                val versionDir = versionsDir.resolve(buildNumber.toString())
+                if (!Files.exists(versionDir)) return@withContext
+
+                Files.walk(versionDir)
+                    .sorted(Comparator.reverseOrder())
+                    .forEach { Files.delete(it) }
+            }
+        }
+
+        /**
+         * Clean up the temp directory.
+         */
+        suspend fun cleanupTemp() {
+            withContext(Dispatchers.IO) {
+                if (!Files.exists(tempDir)) return@withContext
+
+                Files.list(tempDir).use { stream ->
+                    stream.forEach { file ->
+                        try {
+                            Files.deleteIfExists(file)
+                        } catch (e: Exception) {
+                            // Ignore - file might be in use
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -90,58 +198,6 @@ class StorageManager(
                 .map { it!! }
                 .sorted()
                 .toList()
-        }
-    }
-
-    /**
-     * Prepare a version directory by linking files from CAS.
-     *
-     * For each file in the manifest that applies to the given platform:
-     * 1. Look up the file in CAS by hash
-     * 2. Create parent directories in the version directory
-     * 3. Create a link from version/{path} to CAS/{hash}
-     *    - On macOS/Linux: symlink (preferred as they don't modify the CAS file's inode)
-     *    - On Windows: hard link (symlinks require elevated permissions)
-     *
-     * This operation is idempotent - if the version directory already exists with valid links,
-     * those files are skipped. Invalid or broken links are recreated.
-     *
-     * Completeness is guaranteed by the caller saving manifest.json after this method returns.
-     * If manifest.json exists and points to version N, that version is fully prepared.
-     *
-     * @param manifest The bundle manifest describing all files
-     * @param platform The target platform to filter files for
-     * @throws IllegalStateException if a required file is missing from CAS or linking fails
-     */
-    suspend fun prepareVersion(manifest: BundleManifest, platform: Platform) {
-        storageMutex.withLock {
-            ensureDirectoriesExist()
-            val versionDir = versionsDir.resolve(manifest.buildNumber.toString())
-
-            withContext(Dispatchers.IO) {
-                Files.createDirectories(versionDir)
-            }
-
-            // Only prepare files that apply to this platform
-            val platformFiles = manifest.filesForPlatform(platform)
-            for (file in platformFiles) {
-                val sourcePath = contentStore.getPath(file.hash)
-                    ?: throw IllegalStateException("File not in CAS: ${file.hash} (${file.path})")
-
-                val destPath = versionDir.resolve(file.path)
-
-                // Skip if file already exists AND is a valid link to the CAS file
-                val needsLink = withContext(Dispatchers.IO) {
-                    !Files.exists(destPath) || !isSameFile(destPath, sourcePath)
-                }
-                if (!needsLink) continue
-
-                withContext(Dispatchers.IO) {
-                    Files.createDirectories(destPath.parent)
-                    Files.deleteIfExists(destPath)
-                    createLink(destPath, sourcePath)
-                }
-            }
         }
     }
 
@@ -190,18 +246,6 @@ class StorageManager(
     }
 
     /**
-     * Save the current manifest to disk.
-     */
-    suspend fun saveManifest(manifestJson: String) {
-        storageMutex.withLock {
-            withContext(Dispatchers.IO) {
-                Files.createDirectories(bundleDir)
-                Files.writeString(manifestPath, manifestJson)
-            }
-        }
-    }
-
-    /**
      * Load the saved manifest from disk.
      *
      * @return The manifest JSON string, or null if not found
@@ -209,30 +253,6 @@ class StorageManager(
     suspend fun loadManifest(): String? = withContext(Dispatchers.IO) {
         if (!Files.exists(manifestPath)) return@withContext null
         Files.readString(manifestPath)
-    }
-
-    /**
-     * Delete a version directory and all its contents.
-     */
-    suspend fun deleteVersionDirectory(buildNumber: Long) {
-        storageMutex.withLock {
-            deleteVersionDirectoryUnlocked(buildNumber)
-        }
-    }
-
-    /**
-     * Delete a version directory without acquiring the lock.
-     * Caller must hold the storage lock via [withStorageLock].
-     */
-    internal suspend fun deleteVersionDirectoryUnlocked(buildNumber: Long) {
-        withContext(Dispatchers.IO) {
-            val versionDir = versionsDir.resolve(buildNumber.toString())
-            if (!Files.exists(versionDir)) return@withContext
-
-            Files.walk(versionDir)
-                .sorted(Comparator.reverseOrder())
-                .forEach { Files.delete(it) }
-        }
     }
 
     /**
@@ -272,35 +292,6 @@ class StorageManager(
         ensureDirectoriesExist()
         return withContext(Dispatchers.IO) {
             Files.createTempFile(tempDir, prefix, ".tmp")
-        }
-    }
-
-    /**
-     * Clean up the temp directory.
-     */
-    suspend fun cleanupTemp() {
-        storageMutex.withLock {
-            cleanupTempUnlocked()
-        }
-    }
-
-    /**
-     * Clean up the temp directory without acquiring the lock.
-     * Caller must hold the storage lock via [withStorageLock].
-     */
-    internal suspend fun cleanupTempUnlocked() {
-        withContext(Dispatchers.IO) {
-            if (!Files.exists(tempDir)) return@withContext
-
-            Files.list(tempDir).use { stream ->
-                stream.forEach { file ->
-                    try {
-                        Files.deleteIfExists(file)
-                    } catch (e: Exception) {
-                        // Ignore - file might be in use
-                    }
-                }
-            }
         }
     }
 
