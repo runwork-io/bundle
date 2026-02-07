@@ -9,9 +9,14 @@ import io.runwork.bundle.updater.result.DownloadException
 import io.runwork.bundle.updater.result.DownloadResult
 import io.runwork.bundle.updater.storage.StorageManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
@@ -31,6 +36,7 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicLong
 import java.time.Duration
 import java.util.zip.ZipInputStream
 import kotlin.coroutines.coroutineContext
@@ -258,52 +264,55 @@ class DownloadManager(
         strategy: DownloadStrategy.Incremental,
         progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult {
-        var totalDownloaded = 0L
+        val totalDownloaded = AtomicLong(0L)
         val totalBytes = strategy.totalSize
+        val semaphore = Semaphore(4)
 
-        for ((index, file) in strategy.files.withIndex()) {
-            if (!coroutineContext.isActive) {
-                return DownloadResult.Cancelled
+        return try {
+            coroutineScope {
+                strategy.files.mapIndexed { index, file ->
+                    if (!coroutineContext.isActive) return@coroutineScope DownloadResult.Cancelled
+
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            val tempFile = storageManager.createTempFile("file")
+                            try {
+                                downloadFile(
+                                    url = "$baseUrl/files/${file.hash.hex}",
+                                    destPath = tempFile,
+                                    expectedSize = file.size,
+                                ) { bytesRead, _ ->
+                                    progressCallback(
+                                        DownloadProgress(
+                                            bytesDownloaded = totalDownloaded.get() + bytesRead,
+                                            totalBytes = totalBytes,
+                                            currentFile = file.path,
+                                            filesCompleted = index,
+                                            totalFiles = strategy.files.size
+                                        )
+                                    )
+                                }
+
+                                val stored = contentStore.storeWithHash(tempFile, file.hash)
+                                if (!stored) {
+                                    throw DownloadException("Hash mismatch for ${file.path}")
+                                }
+
+                                totalDownloaded.addAndGet(file.size)
+                            } finally {
+                                Files.deleteIfExists(tempFile)
+                            }
+                        }
+                    }
+                }.awaitAll()
             }
 
-            val tempFile = storageManager.createTempFile("file")
-
-            try {
-                val hash = file.hash.hex
-                val baseDownloaded = totalDownloaded
-                downloadFile(
-                    url = "$baseUrl/files/$hash",
-                    destPath = tempFile,
-                    expectedSize = file.size,
-                ) { bytesRead, _ ->
-                    progressCallback(
-                        DownloadProgress(
-                            bytesDownloaded = baseDownloaded + bytesRead,
-                            totalBytes = totalBytes,
-                            currentFile = file.path,
-                            filesCompleted = index,
-                            totalFiles = strategy.files.size
-                        )
-                    )
-                }
-
-                // Verify and store the file
-                val stored = contentStore.storeWithHash(tempFile, file.hash)
-                if (!stored) {
-                    return DownloadResult.Failure("Hash mismatch for ${file.path}")
-                }
-
-                totalDownloaded += file.size
-            } catch (e: DownloadException) {
-                Files.deleteIfExists(tempFile)
-                return DownloadResult.Failure("Failed to download ${file.path}: ${e.message}", e)
-            } catch (e: Exception) {
-                Files.deleteIfExists(tempFile)
-                return DownloadResult.Failure("Unexpected error downloading ${file.path}: ${e.message}", e)
-            }
+            DownloadResult.Success(manifest.buildNumber)
+        } catch (e: DownloadException) {
+            DownloadResult.Failure(e.message ?: "Download failed", e)
+        } catch (e: Exception) {
+            DownloadResult.Failure("Unexpected error: ${e.message}", e)
         }
-
-        return DownloadResult.Success(manifest.buildNumber)
     }
 
     private suspend fun downloadFile(
