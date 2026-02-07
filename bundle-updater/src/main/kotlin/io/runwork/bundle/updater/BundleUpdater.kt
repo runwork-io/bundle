@@ -103,9 +103,6 @@ class BundleUpdater(
      * @return Flow of update events
      */
     fun runInBackground(): Flow<BundleUpdateEvent> = channelFlow {
-        // Initial cleanup on startup (only if up-to-date)
-        tryCleanupIfUpToDate()?.let { send(BundleUpdateEvent.CleanupComplete(it)) }
-
         while (isActive) {
             checkAndDownloadUpdate()
             delay(config.checkInterval)
@@ -190,7 +187,7 @@ class BundleUpdater(
             if (manifest.buildNumber <= config.currentBuildNumber) {
                 send(BundleUpdateEvent.UpToDate)
                 // Up to date - run cleanup
-                tryCleanupIfUpToDate()?.let { send(BundleUpdateEvent.CleanupComplete(it)) }
+                tryCleanup(manifest)?.let { send(BundleUpdateEvent.CleanupComplete(it)) }
                 return
             }
 
@@ -249,22 +246,9 @@ class BundleUpdater(
         }
     }
 
-    private suspend fun tryCleanupIfUpToDate(): CleanupResult? {
+    private suspend fun tryCleanup(manifest: BundleManifest): CleanupResult? {
         return try {
-            val manifest = when (val result = fetchAndVerifyManifest()) {
-                is ManifestFetchResult.Success -> result.manifest
-                is ManifestFetchResult.NetworkError,
-                is ManifestFetchResult.SignatureFailure,
-                is ManifestFetchResult.PlatformMismatch -> return null
-            }
-            val currentBuild = storageManager.getCurrentBuildNumber() ?: return null
-
-            // Only cleanup if up to date
-            if (manifest.buildNumber <= currentBuild) {
-                cleanupManager.cleanup(manifest)
-            } else {
-                null
-            }
+            cleanupManager.cleanup(manifest)
         } catch (e: Exception) {
             // Cleanup failures are non-fatal
             null
