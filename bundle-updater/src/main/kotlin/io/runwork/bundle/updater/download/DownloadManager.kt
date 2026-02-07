@@ -178,19 +178,20 @@ class DownloadManager(
      */
     suspend fun downloadBundle(
         manifest: BundleManifest,
+        strategy: DownloadStrategy? = null,
         progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult = withContext(Dispatchers.IO) {
-        when (val strategy = UpdateDecider.decide(manifest, platform, contentStore)) {
+        when (val resolvedStrategy = strategy ?: UpdateDecider.decide(manifest, platform, contentStore)) {
             is DownloadStrategy.NoDownloadNeeded -> {
                 DownloadResult.Success(manifest.buildNumber)
             }
 
             is DownloadStrategy.FullBundle -> {
-                downloadFullBundle(manifest, strategy, progressCallback)
+                downloadFullBundle(manifest, resolvedStrategy, progressCallback)
             }
 
             is DownloadStrategy.Incremental -> {
-                downloadIncremental(manifest, strategy, progressCallback)
+                downloadIncremental(manifest, resolvedStrategy, progressCallback)
             }
         }
     }

@@ -220,7 +220,7 @@ class BundleUpdater(
             send(BundleUpdateEvent.UpdateAvailable(info))
 
             // Download
-            val result = downloadManager.downloadBundle(manifest) { progress ->
+            val result = downloadManager.downloadBundle(manifest, strategy) { progress ->
                 trySend(BundleUpdateEvent.Downloading(progress))
             }
 
