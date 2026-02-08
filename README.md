@@ -41,9 +41,8 @@ Add artifacts to your `build.gradle.kts` based on your use case:
 
 ```kotlin
 dependencies {
-    // For shell applications (validates and launches bundles)
+    // For shell applications (validates, downloads, and launches bundles)
     implementation("io.runwork:bundle-bootstrap:<version>")
-    implementation("io.runwork:bundle-updater:<version>")
 
     // For applications inside bundles (self-update + resource resolution)
     implementation("io.runwork:bundle-updater:<version>")
@@ -92,7 +91,7 @@ val parsed = Platform.fromString("linux-arm64") // Platform(Os.LINUX, Arch.ARM64
 ### Shell Application: Validate and Launch Bundles
 
 ```kotlin
-val bootstrapConfig = BundleBootstrapConfig(
+val config = BundleBootstrapConfig(
     appDataDir = Path.of(System.getProperty("user.home"), ".myapp"),
     bundleSubdirectory = "bundle",
     baseUrl = "https://updates.myapp.com",
@@ -102,57 +101,25 @@ val bootstrapConfig = BundleBootstrapConfig(
     mainClass = "com.myapp.Main",
 )
 
-val bootstrap = BundleBootstrap(bootstrapConfig)
+val bootstrap = BundleBootstrap(config)
 
-when (val result = bootstrap.validate()) {
-    is BundleValidationResult.Valid -> {
-        val loadedBundle = bootstrap.launch(result)
-        println("Bundle launched: ${loadedBundle.manifest.buildNumber}")
-    }
-    is BundleValidationResult.NoBundleExists -> {
-        // Download initial bundle using BundleUpdater
-        val updaterConfig = BundleUpdaterConfig(
-            appDataDir = Path.of(System.getProperty("user.home"), ".myapp"),
-            bundleSubdirectory = bootstrapConfig.bundleSubdirectory,
-            baseUrl = "https://updates.myapp.com",
-            publicKey = bootstrapConfig.publicKey,
-            currentBuildNumber = 0,
-            platform = bootstrapConfig.platform,
-        )
-        val updater = BundleUpdater(updaterConfig)
-
-        when (val downloadResult = updater.downloadLatest { progress ->
-            println("Downloading: ${progress.bytesDownloaded}/${progress.totalBytes} (${progress.percentCompleteInt}%)")
-        }) {
-            is DownloadResult.Success -> {
-                println("Downloaded build ${downloadResult.buildNumber}")
-                // Re-validate and launch
-                when (val validResult = bootstrap.validate()) {
-                    is BundleValidationResult.Valid -> {
-                        val loadedBundle = bootstrap.launch(validResult)
-                        println("Bundle launched: ${loadedBundle.manifest.buildNumber}")
-                    }
-                    else -> println("Validation failed after download: $validResult")
-                }
-            }
-            is DownloadResult.Failure -> println("Download failed: ${downloadResult.error}")
-            is DownloadResult.AlreadyUpToDate -> println("Already up to date")
-            is DownloadResult.Cancelled -> println("Download cancelled")
+// validateAndLaunch handles the full lifecycle: validate → download → launch.
+// On successful launch, the flow blocks until the bundle's main() completes
+// and then calls exitProcess — the flow never completes in that case.
+bootstrap.validateAndLaunch().collect { event ->
+    when (event) {
+        BundleStartEvent.Progress.Validating -> println("Validating...")
+        is BundleStartEvent.Progress.Downloading -> {
+            println("Downloading: ${event.progress.percentCompleteInt}%")
         }
-        updater.close()
-    }
-    is BundleValidationResult.Failed -> {
-        println("Bundle validation failed: ${result.reason}")
-        result.failures.forEach { failure ->
-            println("  - ${failure.path}: ${failure.reason}")
+        BundleStartEvent.Progress.Launching -> println("Launching...")
+        is BundleStartEvent.Failed -> {
+            println("Failed: ${event.reason} (retryable=${event.isRetryable})")
         }
-    }
-    is BundleValidationResult.ShellUpdateRequired -> {
-        println("Shell update required. Current: ${result.currentVersion}, Required: ${result.requiredVersion}")
-        result.updateUrl?.let { println("  Download from: $it") }
-    }
-    is BundleValidationResult.NetworkError -> {
-        println("Network error: ${result.message}")
+        is BundleStartEvent.ShellUpdateRequired -> {
+            println("Shell update required: ${event.currentVersion} -> ${event.requiredVersion}")
+            event.updateUrl?.let { println("Download from: $it") }
+        }
     }
 }
 ```
