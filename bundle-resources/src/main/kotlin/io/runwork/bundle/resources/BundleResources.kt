@@ -34,7 +34,13 @@ import kotlin.io.path.exists
  */
 object BundleResources {
     @Volatile
-    private var _versionPath: Path? = null
+    private var platformDir: Path? = null
+
+    @Volatile
+    private var osDir: Path? = null
+
+    @Volatile
+    private var commonDir: Path? = null
 
     /**
      * Initialize the resource resolver from BundleLaunchConfig.
@@ -44,28 +50,35 @@ object BundleResources {
      * @throws IllegalStateException if already initialized
      */
     fun init(config: BundleLaunchConfig) {
-        check(_versionPath == null) { "BundleResources already initialized. Call reset() first if re-initialization is needed." }
+        check(platformDir == null) { "BundleResources already initialized. Call reset() first if re-initialization is needed." }
 
         val bundleDir = if (config.bundleSubdirectory.isEmpty()) {
             Path(config.appDataDir)
         } else {
             Path(config.appDataDir).resolve(config.bundleSubdirectory)
         }
-        _versionPath = bundleDir.resolve("versions").resolve(config.currentBuildNumber.toString())
+        val versionDir = bundleDir.resolve("versions").resolve(config.currentBuildNumber.toString())
+        val resourcesDir = versionDir.resolve("resources")
+        val platform = Platform.current
+
+        osDir = resourcesDir.resolve(platform.os.id)
+        commonDir = resourcesDir.resolve("common")
+        // Set platformDir last since it's the volatile field used for initialization checks
+        platformDir = resourcesDir.resolve(platform.toString())
     }
 
     /**
      * Check if the resource resolver has been initialized.
      */
     val isInitialized: Boolean
-        get() = _versionPath != null
+        get() = platformDir != null
 
     /**
-     * The version directory path.
+     * The version directory path. Derived from the cached resource paths.
      * @throws IllegalStateException if not initialized
      */
     val versionDir: Path
-        get() = _versionPath ?: throw IllegalStateException("BundleResources not initialized. Call init() first.")
+        get() = (commonDir ?: throwNotInitialized()).parent.parent
 
     /**
      * Resolve a resource path with platform priority.
@@ -80,12 +93,13 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolve(path: String): Path? {
-        val resourcesDir = versionDir.resolve("resources")
-        val platform = Platform.current
+        val platformDir = platformDir ?: throwNotInitialized()
+        val osDir = osDir!!
+        val commonDir = commonDir!!
 
-        resourcesDir.resolve(platform.toString()).resolve(path).let { if (it.exists()) return it }
-        resourcesDir.resolve(platform.os.id).resolve(path).let { if (it.exists()) return it }
-        resourcesDir.resolve("common").resolve(path).let { if (it.exists()) return it }
+        platformDir.resolve(path).let { if (it.exists()) return it }
+        osDir.resolve(path).let { if (it.exists()) return it }
+        commonDir.resolve(path).let { if (it.exists()) return it }
 
         return null
     }
@@ -99,7 +113,22 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveOrThrow(path: String): Path {
-        return resolve(path) ?: throw ResourceNotFoundException(path, searchLocations(path))
+        val platformDir = platformDir ?: throwNotInitialized()
+        val osDir = osDir!!
+        val commonDir = commonDir!!
+
+        platformDir.resolve(path).let { if (it.exists()) return it }
+        osDir.resolve(path).let { if (it.exists()) return it }
+        commonDir.resolve(path).let { if (it.exists()) return it }
+
+        throw ResourceNotFoundException(
+            path,
+            listOf(
+                platformDir.resolve(path),
+                osDir.resolve(path),
+                commonDir.resolve(path),
+            ),
+        )
     }
 
     /**
@@ -115,8 +144,7 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveNativeLibrary(name: String): Path? {
-        val filename = nativeLibraryFilename(name, Platform.current.os)
-        return resolve(filename)
+        return resolve(nativeLibraryFilename(name))
     }
 
     /**
@@ -130,8 +158,7 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun loadNativeLibrary(name: String) {
-        val filename = nativeLibraryFilename(name, Platform.current.os)
-        val path = resolveOrThrow(filename)
+        val path = resolveOrThrow(nativeLibraryFilename(name))
         System.load(path.toAbsolutePath().toString())
     }
 
@@ -139,21 +166,17 @@ object BundleResources {
      * Reset the resolver (for testing only).
      */
     internal fun reset() {
-        _versionPath = null
+        platformDir = null
+        osDir = null
+        commonDir = null
     }
 
-    private fun searchLocations(path: String): List<Path> {
-        val resourcesDir = versionDir.resolve("resources")
-        val platform = Platform.current
-        return listOf(
-            resourcesDir.resolve(platform.toString()).resolve(path),
-            resourcesDir.resolve(platform.os.id).resolve(path),
-            resourcesDir.resolve("common").resolve(path),
-        )
+    private fun throwNotInitialized(): Nothing {
+        throw IllegalStateException("BundleResources not initialized. Call init() first.")
     }
 
-    private fun nativeLibraryFilename(name: String, os: Os): String {
-        return when (os) {
+    private fun nativeLibraryFilename(name: String): String {
+        return when (Os.current) {
             Os.MACOS -> "lib$name.dylib"
             Os.WINDOWS -> "$name.dll"
             Os.LINUX -> "lib$name.so"
