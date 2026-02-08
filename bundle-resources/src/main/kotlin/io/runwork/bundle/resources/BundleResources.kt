@@ -80,16 +80,8 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolve(path: String): Path? {
-        val resourcesDir = versionDir.resolve("resources")
-        val platform = Platform.current
-
-        val searchLocations = listOf(
-            resourcesDir.resolve(platform.toString()).resolve(path),
-            resourcesDir.resolve(platform.os.id).resolve(path),
-            resourcesDir.resolve("common").resolve(path),
-        )
-
-        return searchLocations.firstOrNull { it.exists() }
+        val (result, _) = findResource(path)
+        return result
     }
 
     /**
@@ -101,17 +93,19 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveOrThrow(path: String): Path {
+        val (result, searchLocations) = findResource(path)
+        return result ?: throw ResourceNotFoundException(path, searchLocations)
+    }
+
+    private fun findResource(path: String): Pair<Path?, List<Path>> {
         val resourcesDir = versionDir.resolve("resources")
         val platform = Platform.current
-
         val searchLocations = listOf(
             resourcesDir.resolve(platform.toString()).resolve(path),
             resourcesDir.resolve(platform.os.id).resolve(path),
             resourcesDir.resolve("common").resolve(path),
         )
-
-        return searchLocations.firstOrNull { it.exists() }
-            ?: throw ResourceNotFoundException(path, searchLocations)
+        return searchLocations.firstOrNull { it.exists() } to searchLocations
     }
 
     /**
