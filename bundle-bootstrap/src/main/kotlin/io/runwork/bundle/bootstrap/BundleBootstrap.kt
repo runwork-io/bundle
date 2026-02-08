@@ -257,6 +257,8 @@ class BundleBootstrap(
             }.awaitAll().filterNotNull()
         }
 
+        onProgress(BundleBootstrapProgress.VerifyingFiles(totalBytes, totalBytes, totalFiles, totalFiles))
+
         if (failures.isNotEmpty()) {
             return BundleValidationResult.Failed(
                 reason = "File verification failed for ${failures.size} file(s)",
