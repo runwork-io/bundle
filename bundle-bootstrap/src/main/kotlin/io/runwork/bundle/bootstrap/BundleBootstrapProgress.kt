@@ -12,11 +12,15 @@ sealed class BundleBootstrapProgress {
 
     /** Verifying file hashes */
     data class VerifyingFiles(
+        val bytesVerified: Long,
+        val totalBytes: Long,
         val filesVerified: Int,
         val totalFiles: Int,
     ) : BundleBootstrapProgress() {
         val percentComplete: Float
-            get() = if (totalFiles > 0) filesVerified.toFloat() / totalFiles else 0f
+            get() = if (totalBytes > 0) bytesVerified.toFloat() / totalBytes else 0f
+        val percentCompleteInt: Int
+            get() = (percentComplete * 100).toInt()
     }
 
     /** Validation complete */

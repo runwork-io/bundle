@@ -107,6 +107,23 @@ class HashVerifierTest {
     }
 
     @Test
+    fun computeHashWithProgress_matchesComputeHash() = runTest {
+        val content = ByteArray(100_000) { it.toByte() }
+        val file = TestFixtures.createTestFile(tempDir, "progress.bin", content)
+
+        val expectedHash = HashVerifier.computeHash(file)
+        val deltas = mutableListOf<Long>()
+
+        val hash = HashVerifier.computeHashWithProgress(file) { bytesJustRead ->
+            deltas.add(bytesJustRead)
+        }
+
+        assertEquals(expectedHash, hash)
+        assertEquals(content.size.toLong(), deltas.sum(), "Sum of deltas should equal file size")
+        assertTrue(deltas.size > 1, "Expected multiple progress callbacks, got ${deltas.size}")
+    }
+
+    @Test
     fun computeHash_emptyFile_returnsCorrectHash() = runTest {
         val file = TestFixtures.createTestFile(tempDir, "empty.txt", ByteArray(0))
 

@@ -156,18 +156,25 @@ class BundleBootstrapStartTest {
         val bootstrap = createBootstrap()
         val events = bootstrap.validateAndLaunch().collectEvents()
 
-        // Should see: Validating → Downloading... → Launching (then Failed because test.txt isn't a JAR)
+        // Should see: ValidatingManifest → Downloading... → ValidatingManifest → Launching (then Failed because test.txt isn't a JAR)
         assertTrue(events.isNotEmpty())
         val progressEvents = events.filterIsInstance<BundleStartEvent.Progress>()
-        assertIs<BundleStartEvent.Progress.Validating>(progressEvents.first())
+        assertIs<BundleStartEvent.Progress.ValidatingManifest>(progressEvents.first())
 
         val hasLaunching = progressEvents.any { it is BundleStartEvent.Progress.Launching }
         assertTrue(hasLaunching, "Expected Launching progress")
 
-        // Verify ordering: Validating before Launching
-        val validatingIdx = progressEvents.indexOfFirst { it is BundleStartEvent.Progress.Validating }
+        // Verify ordering: ValidatingManifest before Launching
+        val validatingIdx = progressEvents.indexOfFirst { it is BundleStartEvent.Progress.ValidatingManifest }
         val launchingIdx = progressEvents.indexOfFirst { it is BundleStartEvent.Progress.Launching }
-        assertTrue(validatingIdx < launchingIdx, "Validating should come before Launching")
+        assertTrue(validatingIdx < launchingIdx, "ValidatingManifest should come before Launching")
+
+        // After download, re-validation should emit ValidatingFiles with correct byte data
+        val validatingFiles = progressEvents.filterIsInstance<BundleStartEvent.Progress.ValidatingFiles>()
+        assertTrue(validatingFiles.isNotEmpty(), "Expected ValidatingFiles progress events")
+        val lastValidating = validatingFiles.last()
+        assertEquals(fileContent.toByteArray().size.toLong(), lastValidating.totalBytes)
+        assertEquals(lastValidating.totalBytes, lastValidating.bytesVerified)
 
         bootstrap.close()
     }

@@ -38,8 +38,8 @@ suspend fun shellStartupWithBundle() {
                 println("Verifying signature...")
             }
             is BundleBootstrapProgress.VerifyingFiles -> {
-                val pct = (progress.percentComplete * 100).toInt()
-                println("Verifying files: ${progress.filesVerified}/${progress.totalFiles} ($pct%)")
+                println("Verifying files: ${progress.filesVerified}/${progress.totalFiles} " +
+                    "(${progress.bytesVerified}/${progress.totalBytes} bytes, ${progress.percentCompleteInt}%)")
             }
             is BundleBootstrapProgress.Complete -> {
                 println("Validation complete")

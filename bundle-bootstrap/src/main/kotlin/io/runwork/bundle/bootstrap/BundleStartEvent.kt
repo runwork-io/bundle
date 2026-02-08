@@ -11,8 +11,21 @@ import io.runwork.bundle.updater.download.DownloadProgress
  */
 sealed class BundleStartEvent {
     sealed class Progress : BundleStartEvent() {
-        /** Validating the existing bundle */
-        data object Validating : Progress()
+        /** Loading and verifying the manifest (signature check) */
+        data object ValidatingManifest : Progress()
+
+        /** Verifying file hashes */
+        data class ValidatingFiles(
+            val bytesVerified: Long,
+            val totalBytes: Long,
+            val filesVerified: Int,
+            val totalFiles: Int,
+        ) : Progress() {
+            val percentComplete: Float
+                get() = if (totalBytes > 0) bytesVerified.toFloat() / totalBytes else 0f
+            val percentCompleteInt: Int
+                get() = (percentComplete * 100).toInt()
+        }
 
         /** Downloading the bundle */
         data class Downloading(val progress: DownloadProgress) : Progress()

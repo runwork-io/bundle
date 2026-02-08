@@ -32,6 +32,8 @@ import java.io.Closeable
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -88,8 +90,9 @@ class BundleBootstrap(
      */
     fun validateAndLaunch(): Flow<BundleStartEvent> = channelFlow {
         // Phase 1: Validate existing bundle
-        send(BundleStartEvent.Progress.Validating)
-        val firstValidation = validate()
+        val firstValidation = validate { progress ->
+            progress.toBundleStartEvent()?.let { trySend(it) }
+        }
 
         when (firstValidation) {
             is BundleValidationResult.Valid -> {
@@ -233,20 +236,26 @@ class BundleBootstrap(
         // Filter files for current platform and verify CAS files (parallel with limit of 5)
         val platformFiles = manifest.filesForPlatform(config.platform)
         val totalFiles = platformFiles.size
-        onProgress(BundleBootstrapProgress.VerifyingFiles(0, totalFiles))
+        val totalBytes = platformFiles.sumOf { it.size }
+        val verifiedBytes = AtomicLong(0)
+        val verifiedFiles = AtomicInteger(0)
+        onProgress(BundleBootstrapProgress.VerifyingFiles(0, totalBytes, 0, totalFiles))
 
         val semaphore = Semaphore(5)
         val failures = coroutineScope {
             platformFiles.map { file ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
-                        verifyFileAndLink(file, versionDir)
+                        val result = verifyFileAndLink(file, versionDir) { bytesJustRead ->
+                            val newBytes = verifiedBytes.addAndGet(bytesJustRead)
+                            onProgress(BundleBootstrapProgress.VerifyingFiles(newBytes, totalBytes, verifiedFiles.get(), totalFiles))
+                        }
+                        verifiedFiles.incrementAndGet()
+                        result
                     }
                 }
             }.awaitAll().filterNotNull()
         }
-
-        onProgress(BundleBootstrapProgress.VerifyingFiles(totalFiles, totalFiles))
 
         if (failures.isNotEmpty()) {
             return BundleValidationResult.Failed(
@@ -388,7 +397,9 @@ class BundleBootstrap(
         when (downloadResult) {
             is DownloadResult.Success -> {
                 // Re-validate after download
-                val revalidation = validate()
+                val revalidation = validate { progress ->
+                    progress.toBundleStartEvent()?.let { trySend(it) }
+                }
 
                 when (revalidation) {
                     is BundleValidationResult.Valid -> {
@@ -494,7 +505,8 @@ class BundleBootstrap(
      */
     private suspend fun verifyFileAndLink(
         file: io.runwork.bundle.common.manifest.BundleFile,
-        versionDir: Path
+        versionDir: Path,
+        onBytesRead: (Long) -> Unit,
     ): VerificationFailure? {
         val casFile = contentStore.getPath(file.hash)
 
@@ -509,7 +521,7 @@ class BundleBootstrap(
         }
 
         // 2. Verify CAS file hash
-        val actualHash = HashVerifier.computeHash(casFile)
+        val actualHash = HashVerifier.computeHashWithProgress(casFile, onBytesRead)
         if (actualHash != file.hash) {
             return VerificationFailure(
                 path = file.path,
@@ -541,6 +553,20 @@ class BundleBootstrap(
 
         return null // Success
     }
+}
+
+private fun BundleBootstrapProgress.toBundleStartEvent(): BundleStartEvent.Progress? = when (this) {
+    is BundleBootstrapProgress.LoadingManifest,
+    is BundleBootstrapProgress.VerifyingSignature -> BundleStartEvent.Progress.ValidatingManifest
+
+    is BundleBootstrapProgress.VerifyingFiles -> BundleStartEvent.Progress.ValidatingFiles(
+        bytesVerified = bytesVerified,
+        totalBytes = totalBytes,
+        filesVerified = filesVerified,
+        totalFiles = totalFiles,
+    )
+
+    is BundleBootstrapProgress.Complete -> null
 }
 
 /** Thread-safe holder for the exit callback. */

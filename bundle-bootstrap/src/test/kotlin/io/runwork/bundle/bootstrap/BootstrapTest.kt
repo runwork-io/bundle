@@ -281,6 +281,56 @@ class BootstrapTest {
     }
 
     @Test
+    fun validate_emitsByteLevelProgress() = runTest {
+        // Use files larger than Okio's 8KB buffer to ensure multiple chunks per file
+        val content1 = ByteArray(20_000) { 0x41 }
+        val content2 = ByteArray(30_000) { 0x42 }
+        val totalSize = (content1.size + content2.size).toLong()
+        val file1 = createBundleFile("file1.bin", content1)
+        val file2 = createBundleFile("file2.bin", content2)
+        val manifest = createSignedManifest(listOf(file1, file2), keyPair)
+
+        setupBundle(manifest, mapOf(file1.hash to content1, file2.hash to content2))
+
+        val progressEvents = mutableListOf<BundleBootstrapProgress>()
+        val bootstrap = createBootstrap()
+        val result = bootstrap.validate { progressEvents.add(it) }
+
+        assertIs<BundleValidationResult.Valid>(result)
+
+        assertIs<BundleBootstrapProgress.LoadingManifest>(progressEvents[0])
+        assertIs<BundleBootstrapProgress.VerifyingSignature>(progressEvents[1])
+
+        // First VerifyingFiles should be the zero-progress event
+        val firstVerifying = progressEvents[2]
+        assertIs<BundleBootstrapProgress.VerifyingFiles>(firstVerifying)
+        assertEquals(0L, firstVerifying.bytesVerified)
+        assertEquals(totalSize, firstVerifying.totalBytes)
+        assertEquals(0, firstVerifying.filesVerified)
+        assertEquals(2, firstVerifying.totalFiles)
+
+        // With intra-file progress, there should be more events than just 1 per file + the zero event
+        val verifyingEvents = progressEvents.filterIsInstance<BundleBootstrapProgress.VerifyingFiles>()
+        assertTrue(verifyingEvents.size > 3, "Expected intra-file progress events, got ${verifyingEvents.size}")
+
+        // bytesVerified should be monotonically non-decreasing
+        for (i in 1 until verifyingEvents.size) {
+            assertTrue(
+                verifyingEvents[i].bytesVerified >= verifyingEvents[i - 1].bytesVerified,
+                "bytesVerified should be monotonically non-decreasing"
+            )
+        }
+
+        // Last VerifyingFiles should show all bytes verified
+        val lastVerifying = verifyingEvents.last()
+        assertEquals(totalSize, lastVerifying.bytesVerified)
+        assertEquals(totalSize, lastVerifying.totalBytes)
+        assertEquals(100, lastVerifying.percentCompleteInt)
+
+        assertIs<BundleBootstrapProgress.Complete>(progressEvents.last())
+    }
+
+    @Test
     fun launch_throwsForMissingMainClass() = runTest {
         // Create a valid manifest pointing to a non-existent main class
         val fileContent = "test content"
