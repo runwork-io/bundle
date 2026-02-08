@@ -90,8 +90,19 @@ class BundleBootstrap(
      */
     fun validateAndLaunch(): Flow<BundleStartEvent> = channelFlow {
         // Phase 1: Validate existing bundle
+        var lastValidatingPercent = -1
         val firstValidation = validate { progress ->
-            progress.toBundleStartEvent()?.let { trySend(it) }
+            progress.toBundleStartEvent()?.let { event ->
+                if (event is BundleStartEvent.Progress.ValidatingFiles) {
+                    val percent = event.percentCompleteInt
+                    if (percent != lastValidatingPercent) {
+                        lastValidatingPercent = percent
+                        trySend(event)
+                    }
+                } else {
+                    trySend(event)
+                }
+            }
         }
 
         when (firstValidation) {
@@ -399,8 +410,19 @@ class BundleBootstrap(
         when (downloadResult) {
             is DownloadResult.Success -> {
                 // Re-validate after download
+                var lastValidatingPercent = -1
                 val revalidation = validate { progress ->
-                    progress.toBundleStartEvent()?.let { trySend(it) }
+                    progress.toBundleStartEvent()?.let { event ->
+                        if (event is BundleStartEvent.Progress.ValidatingFiles) {
+                            val percent = event.percentCompleteInt
+                            if (percent != lastValidatingPercent) {
+                                lastValidatingPercent = percent
+                                trySend(event)
+                            }
+                        } else {
+                            trySend(event)
+                        }
+                    }
                 }
 
                 when (revalidation) {
