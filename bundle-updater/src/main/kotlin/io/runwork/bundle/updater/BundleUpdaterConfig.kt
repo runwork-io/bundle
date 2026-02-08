@@ -1,5 +1,6 @@
 package io.runwork.bundle.updater
 
+import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Platform
 import io.runwork.bundle.common.storage.PlatformPaths
 import java.nio.file.Path
@@ -34,6 +35,30 @@ data class BundleUpdaterConfig(
     /** Interval between automatic update checks when running as a background service */
     val checkInterval: Duration = 6.hours,
 ) {
+    companion object {
+        /**
+         * Create a [BundleUpdaterConfig] from a [BundleLaunchConfig].
+         *
+         * This is the recommended way to create a config when running inside a bundle
+         * for self-updates. The launch config is passed from the shell via `args[0]`.
+         *
+         * @param launchConfig The launch config received from the shell
+         * @param checkInterval Interval between automatic update checks (default: 6 hours)
+         */
+        fun fromLaunchConfig(
+            launchConfig: BundleLaunchConfig,
+            checkInterval: Duration = 6.hours,
+        ): BundleUpdaterConfig = BundleUpdaterConfig(
+            appDataDir = Path.of(launchConfig.appDataDir),
+            bundleSubdirectory = launchConfig.bundleSubdirectory,
+            baseUrl = launchConfig.baseUrl,
+            publicKey = launchConfig.publicKey,
+            currentBuildNumber = launchConfig.currentBuildNumber,
+            platform = Platform.fromString(launchConfig.platform),
+            checkInterval = checkInterval,
+        )
+    }
+
     /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
     val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
 
