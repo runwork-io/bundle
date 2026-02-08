@@ -159,7 +159,8 @@ updater.runInBackground().collect { event ->
         }
         is BundleUpdateEvent.UpdateReady -> {
             println("Update ready! Build ${event.newBuildNumber}")
-            // Prompt user to restart, or auto-restart
+            // Restart the shell process to launch the new version
+            restartProcess()
         }
         is BundleUpdateEvent.Error -> println("Update error: ${event.error.message}")
         is BundleUpdateEvent.CleanupComplete -> {
@@ -167,6 +168,19 @@ updater.runInBackground().collect { event ->
         }
     }
 }
+```
+
+### Restarting the Process
+
+After an update is downloaded, call `restartProcess()` to restart the shell JVM process.
+This spawns a new identical process (same JVM args, classpath, main class) and exits the current one.
+On restart, the shell will validate and launch the new bundle version.
+
+```kotlin
+import io.runwork.bundle.common.restartProcess
+
+// Restart the shell process after an update is ready
+restartProcess()
 ```
 
 ### Platform-Specific Resources (Inside Bundle)
