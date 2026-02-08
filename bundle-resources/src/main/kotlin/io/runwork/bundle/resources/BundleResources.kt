@@ -42,6 +42,9 @@ object BundleResources {
     @Volatile
     private var commonDir: Path? = null
 
+    internal val versionDir: Path
+        get() = (commonDir ?: throwNotInitialized()).parent.parent
+
     /**
      * Initialize the resource resolver from BundleLaunchConfig.
      * Must be called once at app startup before accessing resources.
@@ -72,13 +75,6 @@ object BundleResources {
      */
     val isInitialized: Boolean
         get() = platformDir != null
-
-    /**
-     * The version directory path. Derived from the cached resource paths.
-     * @throws IllegalStateException if not initialized
-     */
-    val versionDir: Path
-        get() = (commonDir ?: throwNotInitialized()).parent.parent
 
     /**
      * Resolve a resource path with platform priority.
