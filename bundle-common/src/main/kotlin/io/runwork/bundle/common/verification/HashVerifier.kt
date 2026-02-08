@@ -8,10 +8,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import okio.Buffer
 import okio.ByteString.Companion.toByteString
 import okio.FileSystem
+import okio.ForwardingSource
 import okio.HashingSource
 import okio.Path.Companion.toOkioPath
+import okio.Source
 import okio.blackholeSink
 import okio.buffer
 import java.nio.file.Files
@@ -32,6 +35,25 @@ object HashVerifier {
      */
     suspend fun computeHash(path: Path): BundleFileHash = withContext(Dispatchers.IO) {
         computeHashSync(path)
+    }
+
+    /**
+     * Compute the SHA-256 hash of a file with chunk-level progress reporting.
+     *
+     * @param path Path to the file
+     * @param onBytesRead Called after each chunk with the number of bytes just read (delta, not cumulative)
+     * @return SHA-256 hash as BundleFileHash
+     */
+    suspend fun computeHashWithProgress(
+        path: Path,
+        onBytesRead: (Long) -> Unit,
+    ): BundleFileHash = withContext(Dispatchers.IO) {
+        val baseSource = FileSystem.SYSTEM.source(path.toOkioPath())
+        val progressSource = ProgressSource(baseSource, onBytesRead)
+        HashingSource.sha256(progressSource).use { hashingSource ->
+            hashingSource.buffer().readAll(blackholeSink())
+            BundleFileHash("sha256", hashingSource.hash.hex())
+        }
     }
 
     /**
@@ -102,6 +124,22 @@ object HashVerifier {
                 }
             }.awaitAll()
         }
+    }
+}
+
+/**
+ * Source wrapper that reports bytes read to a callback.
+ */
+private class ProgressSource(
+    source: Source,
+    private val onBytesRead: (Long) -> Unit,
+) : ForwardingSource(source) {
+    override fun read(sink: Buffer, byteCount: Long): Long {
+        val read = super.read(sink, byteCount)
+        if (read != -1L) {
+            onBytesRead(read)
+        }
+        return read
     }
 }
 
