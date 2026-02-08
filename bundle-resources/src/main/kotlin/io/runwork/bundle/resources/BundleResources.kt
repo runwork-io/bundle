@@ -34,29 +34,24 @@ import kotlin.io.path.exists
  */
 object BundleResources {
     @Volatile
-    var isInitialized: Boolean = false
-        private set
+    private var _state: State? = null
 
-    private lateinit var platformDir: Path
-    private lateinit var osDir: Path
-    private lateinit var commonDir: Path
+    private val state: State
+        get() = _state ?: error("BundleResources not initialized. Call init() first.")
+
+    val isInitialized: Boolean
+        get() = _state != null
 
     internal val versionDir: Path
-        get() {
-            checkInitialized()
-            return commonDir.parent.parent
-        }
+        get() = state.versionDir
 
     /**
      * Initialize the resource resolver from BundleLaunchConfig.
      * Must be called once at app startup before accessing resources.
      *
      * @param config The launch config received in main(args[0])
-     * @throws IllegalStateException if already initialized
      */
     fun init(config: BundleLaunchConfig) {
-        check(!isInitialized) { "BundleResources already initialized. Call reset() first if re-initialization is needed." }
-
         val bundleDir = if (config.bundleSubdirectory.isEmpty()) {
             Path(config.appDataDir)
         } else {
@@ -66,10 +61,12 @@ object BundleResources {
         val resourcesDir = versionDir.resolve("resources")
         val platform = Platform.current
 
-        platformDir = resourcesDir.resolve(platform.toString())
-        osDir = resourcesDir.resolve(platform.os.id)
-        commonDir = resourcesDir.resolve("common")
-        isInitialized = true
+        _state = State(
+            versionDir = versionDir,
+            platformDir = resourcesDir.resolve(platform.toString()),
+            osDir = resourcesDir.resolve(platform.os.id),
+            commonDir = resourcesDir.resolve("common"),
+        )
     }
 
     /**
@@ -85,12 +82,10 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolve(path: String): Path? {
-        checkInitialized()
-
-        platformDir.resolve(path).let { if (it.exists()) return it }
-        osDir.resolve(path).let { if (it.exists()) return it }
-        commonDir.resolve(path).let { if (it.exists()) return it }
-
+        val s = state
+        s.platformDir.resolve(path).let { if (it.exists()) return it }
+        s.osDir.resolve(path).let { if (it.exists()) return it }
+        s.commonDir.resolve(path).let { if (it.exists()) return it }
         return null
     }
 
@@ -103,18 +98,17 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveOrThrow(path: String): Path {
-        checkInitialized()
-
-        platformDir.resolve(path).let { if (it.exists()) return it }
-        osDir.resolve(path).let { if (it.exists()) return it }
-        commonDir.resolve(path).let { if (it.exists()) return it }
+        val s = state
+        s.platformDir.resolve(path).let { if (it.exists()) return it }
+        s.osDir.resolve(path).let { if (it.exists()) return it }
+        s.commonDir.resolve(path).let { if (it.exists()) return it }
 
         throw ResourceNotFoundException(
             path,
             listOf(
-                platformDir.resolve(path),
-                osDir.resolve(path),
-                commonDir.resolve(path),
+                s.platformDir.resolve(path),
+                s.osDir.resolve(path),
+                s.commonDir.resolve(path),
             ),
         )
     }
@@ -150,17 +144,6 @@ object BundleResources {
         System.load(path.toAbsolutePath().toString())
     }
 
-    /**
-     * Reset the resolver (for testing only).
-     */
-    internal fun reset() {
-        isInitialized = false
-    }
-
-    private fun checkInitialized() {
-        check(isInitialized) { "BundleResources not initialized. Call init() first." }
-    }
-
     private fun nativeLibraryFilename(name: String): String {
         return when (Os.current) {
             Os.MACOS -> "lib$name.dylib"
@@ -168,4 +151,11 @@ object BundleResources {
             Os.LINUX -> "lib$name.so"
         }
     }
+
+    private class State(
+        val versionDir: Path,
+        val platformDir: Path,
+        val osDir: Path,
+        val commonDir: Path,
+    )
 }
