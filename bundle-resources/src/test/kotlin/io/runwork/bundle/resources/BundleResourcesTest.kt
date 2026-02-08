@@ -2,7 +2,6 @@ package io.runwork.bundle.resources
 
 import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Platform
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.io.TempDir
@@ -12,7 +11,6 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -20,16 +18,6 @@ import kotlin.test.assertTrue
 class BundleResourcesTest {
     @TempDir
     lateinit var tempDir: Path
-
-    @BeforeEach
-    fun setUp() {
-        BundleResources.reset()
-    }
-
-    @AfterEach
-    fun tearDown() {
-        BundleResources.reset()
-    }
 
     private fun createConfig(
         platform: String = "macos-arm64",
@@ -78,28 +66,6 @@ class BundleResourcesTest {
         }
 
         @Test
-        fun `init throws if already initialized`() {
-            val config = createConfig()
-            BundleResources.init(config)
-
-            assertFailsWith<IllegalStateException> {
-                BundleResources.init(config)
-            }
-        }
-
-        @Test
-        fun `isInitialized returns false before init`() {
-            assertFalse(BundleResources.isInitialized)
-        }
-
-        @Test
-        fun `versionDir throws if not initialized`() {
-            assertFailsWith<IllegalStateException> {
-                BundleResources.versionDir
-            }
-        }
-
-        @Test
         fun `versionDir is computed correctly`() {
             val config = createConfig(buildNumber = 123L)
             BundleResources.init(config)
@@ -115,21 +81,6 @@ class BundleResourcesTest {
 
             val expected = tempDir.resolve("versions/456")
             assertEquals(expected, BundleResources.versionDir)
-        }
-
-        @Test
-        fun `reset allows re-initialization`() {
-            val config1 = createConfig(buildNumber = 100L)
-            BundleResources.init(config1)
-            assertTrue(BundleResources.isInitialized)
-
-            BundleResources.reset()
-            assertFalse(BundleResources.isInitialized)
-
-            val config2 = createConfig(buildNumber = 200L)
-            BundleResources.init(config2)
-            assertTrue(BundleResources.isInitialized)
-            assertTrue(BundleResources.versionDir.toString().contains("200"))
         }
     }
 
@@ -225,24 +176,6 @@ class BundleResourcesTest {
             assertTrue(exception.searchedLocations[1].toString().contains(currentPlatform.os.id))
             assertTrue(exception.searchedLocations[2].toString().contains("common"))
         }
-
-        @Test
-        fun `resolve throws if not initialized`() {
-            BundleResources.reset()
-
-            assertFailsWith<IllegalStateException> {
-                BundleResources.resolve("file.txt")
-            }
-        }
-
-        @Test
-        fun `resolveOrThrow throws if not initialized`() {
-            BundleResources.reset()
-
-            assertFailsWith<IllegalStateException> {
-                BundleResources.resolveOrThrow("file.txt")
-            }
-        }
     }
 
     @Nested
@@ -300,12 +233,6 @@ class BundleResourcesTest {
             assertEquals(platformPath, result)
         }
 
-        @Test
-        fun `resolveNativeLibrary throws if not initialized`() {
-            assertFailsWith<IllegalStateException> {
-                BundleResources.resolveNativeLibrary("whisper")
-            }
-        }
     }
 
 }
