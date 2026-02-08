@@ -15,6 +15,7 @@ import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdaterConfig
 import io.runwork.bundle.updater.download.DownloadProgress
 import io.runwork.bundle.updater.result.DownloadResult
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -465,11 +466,16 @@ class BundleBootstrap(
         send(BundleStartEvent.Progress.Launching)
         try {
             val loadedBundle = launch(validation)
-            // Block until the bundle's main() returns, then exit the process.
-            withContext(Dispatchers.IO) {
-                loadedBundle.mainThread.join()
-            }
-            exitProcess(0)
+
+            // Use onExit callback to capture whether main() threw an exception.
+            // The bundle's main thread catches all exceptions and completes normally,
+            // so we can't rely on mainThread.join() alone to detect failures.
+            val exitException = CompletableDeferred<Throwable?>()
+            loadedBundle.onExit { exception -> exitException.complete(exception) }
+
+            // Wait for the bundle to exit, then terminate with appropriate exit code.
+            val exception = exitException.await()
+            exitProcess(if (exception != null) 1 else 0)
         } catch (e: BundleLoadException) {
             send(
                 BundleStartEvent.Failed(
