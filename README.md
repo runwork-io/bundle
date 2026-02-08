@@ -108,7 +108,10 @@ val bootstrap = BundleBootstrap(config)
 // and then calls exitProcess — the flow never completes in that case.
 bootstrap.validateAndLaunch().collect { event ->
     when (event) {
-        BundleStartEvent.Progress.Validating -> println("Validating...")
+        BundleStartEvent.Progress.ValidatingManifest -> println("Validating manifest...")
+        is BundleStartEvent.Progress.ValidatingFiles -> {
+            println("Validating files: ${event.percentCompleteInt}%")
+        }
         is BundleStartEvent.Progress.Downloading -> {
             println("Downloading: ${event.progress.percentCompleteInt}%")
         }
