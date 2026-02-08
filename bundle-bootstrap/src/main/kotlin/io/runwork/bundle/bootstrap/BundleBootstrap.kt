@@ -13,11 +13,15 @@ import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.common.verification.VerificationFailure
 import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdaterConfig
+import io.runwork.bundle.updater.download.DownloadProgress
 import io.runwork.bundle.updater.result.DownloadResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -73,54 +77,50 @@ class BundleBootstrap(
     /**
      * Validate, download if needed, and launch the bundle.
      *
-     * This is the recommended entry point for shell applications. It handles the full lifecycle:
-     * 1. Validates the existing bundle on disk
-     * 2. If no bundle exists or validation fails (missing/corrupt files), downloads the latest
-     *    bundle from the server and re-validates
-     * 3. Launches the bundle, waits for it to exit, then terminates the process
+     * Returns a [Flow] of [BundleStartEvent]s. Progress events report forward motion;
+     * terminal events ([BundleStartEvent.Failed], [BundleStartEvent.ShellUpdateRequired])
+     * are emitted and then the flow completes normally.
      *
-     * This method **never returns** on successful launch — it blocks until the bundle's `main()`
-     * completes, then calls `exitProcess()`.
-     *
-     * @param onProgress Called with progress updates during the process
-     * @throws ShellUpdateRequiredException if the bundle requires a newer shell version
-     * @throws BundleStartException if the bundle cannot be started
+     * On successful launch, this blocks until the bundle's `main()` completes,
+     * then calls `exitProcess(0)` — the flow never completes in that case.
      */
-    suspend fun validateAndLaunch(
-        onProgress: (BundleStartProgress) -> Unit = {}
-    ): Nothing {
+    fun validateAndLaunch(): Flow<BundleStartEvent> = channelFlow {
         // Phase 1: Validate existing bundle
-        onProgress(BundleStartProgress.Validating)
+        send(BundleStartEvent.Progress.Validating)
         val firstValidation = validate()
 
         when (firstValidation) {
             is BundleValidationResult.Valid -> {
                 // Bundle is valid, launch it
-                launchFromValidation(firstValidation, onProgress)
+                launchFromValidation(firstValidation)
             }
 
             is BundleValidationResult.ShellUpdateRequired -> {
-                throw ShellUpdateRequiredException(
-                    currentVersion = firstValidation.currentVersion,
-                    requiredVersion = firstValidation.requiredVersion,
-                    updateUrl = firstValidation.updateUrl,
+                send(
+                    BundleStartEvent.ShellUpdateRequired(
+                        currentVersion = firstValidation.currentVersion,
+                        requiredVersion = firstValidation.requiredVersion,
+                        updateUrl = firstValidation.updateUrl,
+                    )
                 )
             }
 
             is BundleValidationResult.NoBundleExists -> {
                 // No bundle — download and launch
-                downloadAndLaunch(onProgress)
+                downloadAndLaunch()
             }
 
             is BundleValidationResult.Failed -> {
                 // Validation failed — try downloading a fresh bundle
-                downloadAndLaunch(onProgress)
+                downloadAndLaunch()
             }
 
             is BundleValidationResult.NetworkError -> {
-                throw BundleStartException(
-                    reason = firstValidation.message,
-                    isRetryable = true,
+                send(
+                    BundleStartEvent.Failed(
+                        reason = firstValidation.message,
+                        isRetryable = true,
+                    )
                 )
             }
         }
@@ -136,16 +136,11 @@ class BundleBootstrap(
      * @return Download result
      */
     suspend fun downloadLatest(
-        onProgress: (BundleStartProgress) -> Unit = {}
+        onProgress: (DownloadProgress) -> Unit = {}
     ): DownloadResult {
-        onProgress(BundleStartProgress.DownloadRequired)
-        val result = updater.downloadLatest { progress ->
-            onProgress(BundleStartProgress.Downloading(progress))
+        return updater.downloadLatest { progress ->
+            onProgress(progress)
         }
-        if (result is DownloadResult.Success) {
-            onProgress(BundleStartProgress.DownloadComplete)
-        }
-        return result
     }
 
     /**
@@ -382,52 +377,54 @@ class BundleBootstrap(
 
     // ============ INTERNAL HELPERS ============
 
-    private suspend fun downloadAndLaunch(
-        onProgress: (BundleStartProgress) -> Unit
-    ): Nothing {
+    private suspend fun ProducerScope<BundleStartEvent>.downloadAndLaunch() {
         // Download
-        onProgress(BundleStartProgress.DownloadRequired)
         val downloadResult = updater.downloadLatest { progress ->
-            onProgress(BundleStartProgress.Downloading(progress))
+            trySend(BundleStartEvent.Progress.Downloading(progress))
         }
 
         when (downloadResult) {
             is DownloadResult.Success -> {
-                onProgress(BundleStartProgress.DownloadComplete)
-
                 // Re-validate after download
-                onProgress(BundleStartProgress.Revalidating)
                 val revalidation = validate()
 
                 when (revalidation) {
                     is BundleValidationResult.Valid -> {
-                        launchFromValidation(revalidation, onProgress)
+                        launchFromValidation(revalidation)
                     }
 
                     is BundleValidationResult.ShellUpdateRequired -> {
-                        throw ShellUpdateRequiredException(
-                            currentVersion = revalidation.currentVersion,
-                            requiredVersion = revalidation.requiredVersion,
-                            updateUrl = revalidation.updateUrl,
+                        send(
+                            BundleStartEvent.ShellUpdateRequired(
+                                currentVersion = revalidation.currentVersion,
+                                requiredVersion = revalidation.requiredVersion,
+                                updateUrl = revalidation.updateUrl,
+                            )
                         )
                     }
 
                     is BundleValidationResult.NoBundleExists -> {
-                        throw BundleStartException(
-                            reason = "Bundle missing after download",
+                        send(
+                            BundleStartEvent.Failed(
+                                reason = "Bundle missing after download",
+                            )
                         )
                     }
 
                     is BundleValidationResult.Failed -> {
-                        throw BundleStartException(
-                            reason = revalidation.reason,
+                        send(
+                            BundleStartEvent.Failed(
+                                reason = revalidation.reason,
+                            )
                         )
                     }
 
                     is BundleValidationResult.NetworkError -> {
-                        throw BundleStartException(
-                            reason = revalidation.message,
-                            isRetryable = true,
+                        send(
+                            BundleStartEvent.Failed(
+                                reason = revalidation.message,
+                                isRetryable = true,
+                            )
                         )
                     }
                 }
@@ -435,41 +432,50 @@ class BundleBootstrap(
 
             is DownloadResult.AlreadyUpToDate -> {
                 // Already up to date but initial validation failed — something is wrong
-                throw BundleStartException(
-                    reason = "Bundle validation failed and no update available",
+                send(
+                    BundleStartEvent.Failed(
+                        reason = "Bundle validation failed and no update available",
+                    )
                 )
             }
 
             is DownloadResult.Failure -> {
-                throw BundleStartException(
-                    reason = downloadResult.error,
-                    cause = downloadResult.cause,
-                    isRetryable = true,
+                send(
+                    BundleStartEvent.Failed(
+                        reason = downloadResult.error,
+                        cause = downloadResult.cause,
+                        isRetryable = true,
+                    )
                 )
             }
 
             is DownloadResult.Cancelled -> {
-                throw BundleStartException(
-                    reason = "Download was cancelled",
+                send(
+                    BundleStartEvent.Failed(
+                        reason = "Download was cancelled",
+                    )
                 )
             }
         }
     }
 
-    private fun launchFromValidation(
+    private suspend fun ProducerScope<BundleStartEvent>.launchFromValidation(
         validation: BundleValidationResult.Valid,
-        onProgress: (BundleStartProgress) -> Unit
-    ): Nothing {
-        onProgress(BundleStartProgress.Launching)
+    ) {
+        send(BundleStartEvent.Progress.Launching)
         try {
             val loadedBundle = launch(validation)
             // Block until the bundle's main() returns, then exit the process.
-            loadedBundle.mainThread.join()
+            withContext(Dispatchers.IO) {
+                loadedBundle.mainThread.join()
+            }
             exitProcess(0)
         } catch (e: BundleLoadException) {
-            throw BundleStartException(
-                reason = e.message ?: "Failed to launch bundle",
-                cause = e,
+            send(
+                BundleStartEvent.Failed(
+                    reason = e.message ?: "Failed to launch bundle",
+                    cause = e,
+                )
             )
         }
     }

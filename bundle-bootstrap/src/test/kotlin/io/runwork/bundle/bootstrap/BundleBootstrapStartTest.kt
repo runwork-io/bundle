@@ -8,6 +8,9 @@ import io.runwork.bundle.common.manifest.BundleFileHash
 import io.runwork.bundle.common.manifest.BundleManifest
 import io.runwork.bundle.common.manifest.PlatformBundle
 import io.runwork.bundle.common.verification.HashVerifier
+import io.runwork.bundle.updater.download.DownloadProgress
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import java.nio.file.Files
@@ -23,7 +26,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -64,9 +66,10 @@ class BundleBootstrapStartTest {
         val bootstrap = createBootstrap()
 
         // Can't actually launch because test.txt isn't a JAR with a main class,
-        // but we can verify the flow: it should try to launch and fail with BundleStartException
-        val e = assertFailsWith<BundleStartException> { bootstrap.validateAndLaunch() }
-        assertTrue(e.reason.contains("not found", ignoreCase = true))
+        // but we can verify the flow: it should try to launch and fail with Failed event
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        val failed = events.filterIsInstance<BundleStartEvent.Failed>().single()
+        assertTrue(failed.reason.contains("not found", ignoreCase = true))
     }
 
     @Test
@@ -81,14 +84,15 @@ class BundleBootstrapStartTest {
         val bootstrap = createBootstrap()
 
         // Should download then attempt launch (fails because test.txt isn't a JAR)
-        val e = assertFailsWith<BundleStartException> { bootstrap.validateAndLaunch() }
-        assertTrue(e.reason.contains("not found", ignoreCase = true))
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        val failed = events.filterIsInstance<BundleStartEvent.Failed>().single()
+        assertTrue(failed.reason.contains("not found", ignoreCase = true))
 
         bootstrap.close()
     }
 
     @Test
-    fun start_throwsShellUpdateRequired() = runTest {
+    fun start_emitsShellUpdateRequired() = runTest {
         // Set up bundle that requires newer shell
         val fileContent = "test content"
         val bundleFile = createBundleFile("test.txt", fileContent.toByteArray())
@@ -101,24 +105,26 @@ class BundleBootstrapStartTest {
         setupBundleOnDisk(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
 
         val bootstrap = createBootstrap(shellVersion = 5)
-        val e = assertFailsWith<ShellUpdateRequiredException> { bootstrap.validateAndLaunch() }
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        val shellUpdate = events.filterIsInstance<BundleStartEvent.ShellUpdateRequired>().single()
 
-        assertEquals(5, e.currentVersion)
-        assertEquals(10, e.requiredVersion)
-        assertEquals("https://example.com/update", e.updateUrl)
+        assertEquals(5, shellUpdate.currentVersion)
+        assertEquals(10, shellUpdate.requiredVersion)
+        assertEquals("https://example.com/update", shellUpdate.updateUrl)
     }
 
     @Test
-    fun start_throwsForDownloadFailure() = runTest {
+    fun start_emitsFailedForDownloadFailure() = runTest {
         // Server dir is empty — no manifest to download
         val bootstrap = createBootstrap(baseUrl = "file://${serverDir.toAbsolutePath()}")
 
-        val e = assertFailsWith<BundleStartException> { bootstrap.validateAndLaunch() }
-        assertTrue(e.isRetryable)
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        val failed = events.filterIsInstance<BundleStartEvent.Failed>().single()
+        assertTrue(failed.isRetryable)
     }
 
     @Test
-    fun start_throwsForSignatureError() = runTest {
+    fun start_emitsFailedForSignatureError() = runTest {
         // Create manifest signed with wrong key
         val wrongKeyPair = generateTestKeyPair()
         val fileContent = "test content"
@@ -134,7 +140,8 @@ class BundleBootstrapStartTest {
         val bootstrap = createBootstrap()
 
         // Download should fail because signature check fails
-        assertFailsWith<BundleStartException> { bootstrap.validateAndLaunch() }
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        assertTrue(events.any { it is BundleStartEvent.Failed })
     }
 
     @Test
@@ -146,39 +153,21 @@ class BundleBootstrapStartTest {
 
         setupBundleServer(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
 
-        val progressEvents = mutableListOf<BundleStartProgress>()
         val bootstrap = createBootstrap()
-        // validateAndLaunch throws because test.txt isn't a JAR, but progress events are still emitted
-        try {
-            bootstrap.validateAndLaunch { progressEvents.add(it) }
-        } catch (_: BundleStartException) {
-            // Expected — test.txt isn't a real JAR
-        }
+        val events = bootstrap.validateAndLaunch().collectEvents()
 
-        // Should see: Validating → DownloadRequired → Downloading... → DownloadComplete → Revalidating → Launching
-        assertTrue(progressEvents.isNotEmpty())
-        assertIs<BundleStartProgress.Validating>(progressEvents.first())
+        // Should see: Validating → Downloading... → Launching (then Failed because test.txt isn't a JAR)
+        assertTrue(events.isNotEmpty())
+        val progressEvents = events.filterIsInstance<BundleStartEvent.Progress>()
+        assertIs<BundleStartEvent.Progress.Validating>(progressEvents.first())
 
-        // Find the key transition points
-        val hasDownloadRequired = progressEvents.any { it is BundleStartProgress.DownloadRequired }
-        val hasDownloadComplete = progressEvents.any { it is BundleStartProgress.DownloadComplete }
-        val hasRevalidating = progressEvents.any { it is BundleStartProgress.Revalidating }
-        val hasLaunching = progressEvents.any { it is BundleStartProgress.Launching }
-
-        assertTrue(hasDownloadRequired, "Expected DownloadRequired progress")
-        assertTrue(hasDownloadComplete, "Expected DownloadComplete progress")
-        assertTrue(hasRevalidating, "Expected Revalidating progress")
+        val hasLaunching = progressEvents.any { it is BundleStartEvent.Progress.Launching }
         assertTrue(hasLaunching, "Expected Launching progress")
 
-        // Verify ordering
-        val downloadRequiredIdx = progressEvents.indexOfFirst { it is BundleStartProgress.DownloadRequired }
-        val downloadCompleteIdx = progressEvents.indexOfFirst { it is BundleStartProgress.DownloadComplete }
-        val revalidatingIdx = progressEvents.indexOfFirst { it is BundleStartProgress.Revalidating }
-        val launchingIdx = progressEvents.indexOfFirst { it is BundleStartProgress.Launching }
-
-        assertTrue(downloadRequiredIdx < downloadCompleteIdx, "DownloadRequired should come before DownloadComplete")
-        assertTrue(downloadCompleteIdx < revalidatingIdx, "DownloadComplete should come before Revalidating")
-        assertTrue(revalidatingIdx < launchingIdx, "Revalidating should come before Launching")
+        // Verify ordering: Validating before Launching
+        val validatingIdx = progressEvents.indexOfFirst { it is BundleStartEvent.Progress.Validating }
+        val launchingIdx = progressEvents.indexOfFirst { it is BundleStartEvent.Progress.Launching }
+        assertTrue(validatingIdx < launchingIdx, "Validating should come before Launching")
 
         bootstrap.close()
     }
@@ -209,11 +198,12 @@ class BundleBootstrapStartTest {
 
         // Should detect missing CAS file, download fresh, then attempt launch
         // (fails because test.txt isn't a JAR, but the download + revalidation should succeed)
-        val e = assertFailsWith<BundleStartException> { bootstrap.validateAndLaunch() }
+        val events = bootstrap.validateAndLaunch().collectEvents()
+        val failed = events.filterIsInstance<BundleStartEvent.Failed>().single()
         assertTrue(
-            e.reason.contains("not found", ignoreCase = true) ||
-                e.reason.contains("Main class", ignoreCase = true),
-            "Expected launch failure after recovery, got: ${e.reason}"
+            failed.reason.contains("not found", ignoreCase = true) ||
+                failed.reason.contains("Main class", ignoreCase = true),
+            "Expected launch failure after recovery, got: ${failed.reason}"
         )
 
         bootstrap.close()
@@ -229,12 +219,10 @@ class BundleBootstrapStartTest {
         setupBundleServer(manifest, mapOf(bundleFile.hash to fileContent.toByteArray()))
 
         val bootstrap = createBootstrap()
-        val progressEvents = mutableListOf<BundleStartProgress>()
+        val progressEvents = mutableListOf<DownloadProgress>()
         val result = bootstrap.downloadLatest { progressEvents.add(it) }
 
         assertIs<io.runwork.bundle.updater.result.DownloadResult.Success>(result)
-        assertTrue(progressEvents.any { it is BundleStartProgress.DownloadRequired })
-        assertTrue(progressEvents.any { it is BundleStartProgress.DownloadComplete })
 
         bootstrap.close()
     }
@@ -248,6 +236,8 @@ class BundleBootstrapStartTest {
     }
 
     // ----- Helper methods -----
+
+    private suspend fun Flow<BundleStartEvent>.collectEvents(): List<BundleStartEvent> = toList()
 
     private fun createBootstrap(
         shellVersion: Int = 100,
