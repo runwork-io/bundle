@@ -83,13 +83,11 @@ object BundleResources {
         val resourcesDir = versionDir.resolve("resources")
         val platform = Platform.current
 
-        val searchLocations = listOf(
-            resourcesDir.resolve(platform.toString()).resolve(path),
-            resourcesDir.resolve(platform.os.id).resolve(path),
-            resourcesDir.resolve("common").resolve(path),
-        )
+        resourcesDir.resolve(platform.toString()).resolve(path).let { if (it.exists()) return it }
+        resourcesDir.resolve(platform.os.id).resolve(path).let { if (it.exists()) return it }
+        resourcesDir.resolve("common").resolve(path).let { if (it.exists()) return it }
 
-        return searchLocations.firstOrNull { it.exists() }
+        return null
     }
 
     /**
@@ -101,17 +99,7 @@ object BundleResources {
      * @throws IllegalStateException if not initialized
      */
     fun resolveOrThrow(path: String): Path {
-        val resourcesDir = versionDir.resolve("resources")
-        val platform = Platform.current
-
-        val searchLocations = listOf(
-            resourcesDir.resolve(platform.toString()).resolve(path),
-            resourcesDir.resolve(platform.os.id).resolve(path),
-            resourcesDir.resolve("common").resolve(path),
-        )
-
-        return searchLocations.firstOrNull { it.exists() }
-            ?: throw ResourceNotFoundException(path, searchLocations)
+        return resolve(path) ?: throw ResourceNotFoundException(path, searchLocations(path))
     }
 
     /**
@@ -152,6 +140,16 @@ object BundleResources {
      */
     internal fun reset() {
         _versionPath = null
+    }
+
+    private fun searchLocations(path: String): List<Path> {
+        val resourcesDir = versionDir.resolve("resources")
+        val platform = Platform.current
+        return listOf(
+            resourcesDir.resolve(platform.toString()).resolve(path),
+            resourcesDir.resolve(platform.os.id).resolve(path),
+            resourcesDir.resolve("common").resolve(path),
+        )
     }
 
     private fun nativeLibraryFilename(name: String, os: Os): String {
