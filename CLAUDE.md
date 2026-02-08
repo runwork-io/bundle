@@ -145,6 +145,7 @@ bundle/
 | `HashVerifier` | SHA-256 computation using Okio |
 | `SignatureVerifier` | Ed25519 verification using JDK built-in |
 | `BundleLaunchConfig` | Config passed from shell to bundle's main() |
+| `restartProcess()` | Restart current JVM process (spawn-then-exit) |
 
 ### bundle-resources
 | Class | Purpose |

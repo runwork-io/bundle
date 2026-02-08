@@ -3,6 +3,7 @@ package samples
 import io.runwork.bundle.common.BundleJson
 import io.runwork.bundle.common.BundleLaunchConfig
 import io.runwork.bundle.common.Platform
+import io.runwork.bundle.common.restartProcess
 import io.runwork.bundle.updater.BundleUpdater
 import io.runwork.bundle.updater.BundleUpdateEvent
 import io.runwork.bundle.updater.BundleUpdaterConfig
@@ -85,8 +86,8 @@ suspend fun startUpdateChecker(launchConfig: BundleLaunchConfig) {
 }
 
 fun promptUserToRestart() {
-    // Show UI dialog, or auto-restart
-    // On restart, the shell will launch the new version
+    // Restart the shell process — it will validate and launch the new bundle version
+    restartProcess()
 }
 
 fun runApplication() {
