@@ -23,6 +23,13 @@ import java.io.Closeable
 /**
  * Main entry point for bundle updates.
  *
+ * **For shell applications**: Use [io.runwork.bundle.bootstrap.BundleBootstrap.validateAndLaunch] instead of
+ * creating a `BundleUpdater` directly. `BundleBootstrap.validateAndLaunch()` handles the full lifecycle
+ * (validate → download → launch) and prevents storage conflicts between shell and bundle updaters.
+ *
+ * **For bundle self-updates**: Create a `BundleUpdater` using [BundleUpdaterConfig.fromLaunchConfig]
+ * and call [runInBackground] to begin periodic update checking.
+ *
  * Provides two usage modes:
  * 1. **One-shot** (shell initial download): Call [downloadLatest] to download the latest bundle
  * 2. **Background service** (bundle self-updates): Call [runInBackground] to begin periodic update checking

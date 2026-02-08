@@ -11,6 +11,9 @@ import io.runwork.bundle.common.storage.ContentAddressableStore
 import io.runwork.bundle.common.verification.HashVerifier
 import io.runwork.bundle.common.verification.SignatureVerifier
 import io.runwork.bundle.common.verification.VerificationFailure
+import io.runwork.bundle.updater.BundleUpdater
+import io.runwork.bundle.updater.BundleUpdaterConfig
+import io.runwork.bundle.updater.result.DownloadResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -19,32 +22,141 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import java.io.Closeable
 import java.lang.reflect.Modifier
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.concurrent.thread
+import kotlin.system.exitProcess
 
 /**
  * Validates and launches bundles.
  *
- * Provides a two-phase API:
+ * **Recommended API for shell applications**: Use [validateAndLaunch] which handles the full lifecycle
+ * (validate → download → launch) and internally manages a [BundleUpdater] to prevent
+ * storage conflicts.
+ *
+ * **Advanced two-phase API** (for custom control flow):
  * 1. [validate] - Validates the bundle without launching (returns [BundleValidationResult])
  * 2. [launch] - Launches a validated bundle (only call with [BundleValidationResult.Valid])
  *
  * This separation allows the shell to:
  * - Show appropriate UI based on validation result
- * - Handle missing bundles by calling BundleUpdater.downloadLatest()
+ * - Handle missing bundles by calling [downloadLatest]
  * - Handle shell updates before attempting to launch
+ *
+ * Implements [Closeable] to release the internal HTTP client used for downloads.
  */
 class BundleBootstrap(
     private val config: BundleBootstrapConfig
-) {
+) : Closeable {
     private val versionsDir = config.bundleDir.resolve("versions")
     private val manifestPath = config.bundleDir.resolve("manifest.json")
     private val casDir = config.bundleDir.resolve("cas")
     private val contentStore = ContentAddressableStore(casDir)
     private val signatureVerifier = SignatureVerifier(config.publicKey)
     private val json = BundleJson.decodingJson
+
+    private val updater = BundleUpdater(
+        BundleUpdaterConfig(
+            appDataDir = config.appDataDir,
+            bundleSubdirectory = config.bundleSubdirectory,
+            baseUrl = config.baseUrl,
+            publicKey = config.publicKey,
+            currentBuildNumber = 0,
+            platform = config.platform,
+        )
+    )
+
+    // ============ HIGH-LEVEL API ============
+
+    /**
+     * Validate, download if needed, and launch the bundle.
+     *
+     * This is the recommended entry point for shell applications. It handles the full lifecycle:
+     * 1. Validates the existing bundle on disk
+     * 2. If no bundle exists or validation fails (missing/corrupt files), downloads the latest
+     *    bundle from the server and re-validates
+     * 3. Launches the bundle, waits for it to exit, then terminates the process
+     *
+     * This method **never returns** on successful launch — it blocks until the bundle's `main()`
+     * completes, then calls `exitProcess()`.
+     *
+     * @param onProgress Called with progress updates during the process
+     * @throws ShellUpdateRequiredException if the bundle requires a newer shell version
+     * @throws BundleStartException if the bundle cannot be started
+     */
+    suspend fun validateAndLaunch(
+        onProgress: (BundleStartProgress) -> Unit = {}
+    ): Nothing {
+        // Phase 1: Validate existing bundle
+        onProgress(BundleStartProgress.Validating)
+        val firstValidation = validate()
+
+        when (firstValidation) {
+            is BundleValidationResult.Valid -> {
+                // Bundle is valid, launch it
+                launchFromValidation(firstValidation, onProgress)
+            }
+
+            is BundleValidationResult.ShellUpdateRequired -> {
+                throw ShellUpdateRequiredException(
+                    currentVersion = firstValidation.currentVersion,
+                    requiredVersion = firstValidation.requiredVersion,
+                    updateUrl = firstValidation.updateUrl,
+                )
+            }
+
+            is BundleValidationResult.NoBundleExists -> {
+                // No bundle — download and launch
+                downloadAndLaunch(onProgress)
+            }
+
+            is BundleValidationResult.Failed -> {
+                // Validation failed — try downloading a fresh bundle
+                downloadAndLaunch(onProgress)
+            }
+
+            is BundleValidationResult.NetworkError -> {
+                throw BundleStartException(
+                    reason = firstValidation.message,
+                    isRetryable = true,
+                )
+            }
+        }
+    }
+
+    /**
+     * Download the latest bundle.
+     *
+     * Delegates to the internal [BundleUpdater]. This is exposed for the advanced two-phase API
+     * where the shell manually orchestrates validate → download → launch.
+     *
+     * @param onProgress Called with download progress updates
+     * @return Download result
+     */
+    suspend fun downloadLatest(
+        onProgress: (BundleStartProgress) -> Unit = {}
+    ): DownloadResult {
+        onProgress(BundleStartProgress.DownloadRequired)
+        val result = updater.downloadLatest { progress ->
+            onProgress(BundleStartProgress.Downloading(progress))
+        }
+        if (result is DownloadResult.Success) {
+            onProgress(BundleStartProgress.DownloadComplete)
+        }
+        return result
+    }
+
+    /**
+     * Close the bootstrap and release resources (internal HTTP client).
+     * Safe to call multiple times.
+     */
+    override fun close() {
+        updater.close()
+    }
+
+    // ============ TWO-PHASE API ============
 
     /**
      * Phase 1: Validate the bundle.
@@ -266,6 +378,100 @@ class BundleBootstrap(
             mainThread = mainThread,
             onExit = { callback -> exitCallbackHolder.callback = callback },
         )
+    }
+
+    // ============ INTERNAL HELPERS ============
+
+    private suspend fun downloadAndLaunch(
+        onProgress: (BundleStartProgress) -> Unit
+    ): Nothing {
+        // Download
+        onProgress(BundleStartProgress.DownloadRequired)
+        val downloadResult = updater.downloadLatest { progress ->
+            onProgress(BundleStartProgress.Downloading(progress))
+        }
+
+        when (downloadResult) {
+            is DownloadResult.Success -> {
+                onProgress(BundleStartProgress.DownloadComplete)
+
+                // Re-validate after download
+                onProgress(BundleStartProgress.Revalidating)
+                val revalidation = validate()
+
+                when (revalidation) {
+                    is BundleValidationResult.Valid -> {
+                        launchFromValidation(revalidation, onProgress)
+                    }
+
+                    is BundleValidationResult.ShellUpdateRequired -> {
+                        throw ShellUpdateRequiredException(
+                            currentVersion = revalidation.currentVersion,
+                            requiredVersion = revalidation.requiredVersion,
+                            updateUrl = revalidation.updateUrl,
+                        )
+                    }
+
+                    is BundleValidationResult.NoBundleExists -> {
+                        throw BundleStartException(
+                            reason = "Bundle missing after download",
+                        )
+                    }
+
+                    is BundleValidationResult.Failed -> {
+                        throw BundleStartException(
+                            reason = revalidation.reason,
+                        )
+                    }
+
+                    is BundleValidationResult.NetworkError -> {
+                        throw BundleStartException(
+                            reason = revalidation.message,
+                            isRetryable = true,
+                        )
+                    }
+                }
+            }
+
+            is DownloadResult.AlreadyUpToDate -> {
+                // Already up to date but initial validation failed — something is wrong
+                throw BundleStartException(
+                    reason = "Bundle validation failed and no update available",
+                )
+            }
+
+            is DownloadResult.Failure -> {
+                throw BundleStartException(
+                    reason = downloadResult.error,
+                    cause = downloadResult.cause,
+                    isRetryable = true,
+                )
+            }
+
+            is DownloadResult.Cancelled -> {
+                throw BundleStartException(
+                    reason = "Download was cancelled",
+                )
+            }
+        }
+    }
+
+    private fun launchFromValidation(
+        validation: BundleValidationResult.Valid,
+        onProgress: (BundleStartProgress) -> Unit
+    ): Nothing {
+        onProgress(BundleStartProgress.Launching)
+        try {
+            val loadedBundle = launch(validation)
+            // Block until the bundle's main() returns, then exit the process.
+            loadedBundle.mainThread.join()
+            exitProcess(0)
+        } catch (e: BundleLoadException) {
+            throw BundleStartException(
+                reason = e.message ?: "Failed to launch bundle",
+                cause = e,
+            )
+        }
     }
 
     /**

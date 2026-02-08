@@ -19,9 +19,12 @@ kotlin {
 
 dependencies {
     api(project(":bundle-common"))
+    implementation(project(":bundle-updater"))
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(project(":bundle-creator"))
 }
 
 tasks.test {
