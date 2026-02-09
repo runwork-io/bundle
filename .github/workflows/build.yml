@@ -22,7 +22,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: useblacksmith/setup-gradle/setup-gradle
+        uses: useblacksmith/setup-gradle/setup-gradle@v5
 
       - name: Run tests
         run: ./gradlew test
