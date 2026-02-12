@@ -109,6 +109,14 @@ abstract class BundleCreatorTask : DefaultTask() {
     abstract val shellUpdateUrl: Property<String>
 
     /**
+     * Fully qualified class name for handling shell messages via onShellMessage(String).
+     * If not set, the shell-to-bundle message bridge is not created.
+     */
+    @get:Input
+    @get:Optional
+    abstract val shellMessageHandlerClass: Property<String>
+
+    /**
      * Base64-encoded private key value.
      * This is the preferred option for CI/CD as it works well with Gradle providers:
      * ```kotlin
@@ -197,6 +205,13 @@ abstract class BundleCreatorTask : DefaultTask() {
             null
         }
 
+        // Get shell message handler class
+        val msgHandlerClass = if (shellMessageHandlerClass.isPresent) {
+            shellMessageHandlerClass.get()
+        } else {
+            null
+        }
+
         // Load signer
         val signer = BundleManifestSigner.fromBase64(privateKeyBase64)
 
@@ -223,6 +238,7 @@ abstract class BundleCreatorTask : DefaultTask() {
             files = bundleFiles,
             mainClass = mainClass.get(),
             zips = zipsMap,
+            shellMessageHandlerClass = msgHandlerClass,
             signature = ""
         )
 

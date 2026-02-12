@@ -99,6 +99,7 @@ val config = BundleBootstrapConfig(
     shellVersion = 1,
     platform = Platform.current,
     mainClass = "com.myapp.Main",
+    updateMode = UpdateMode.CheckOnLaunch, // See "Update Modes" below
 )
 
 val bootstrap = BundleBootstrap(config)
@@ -108,6 +109,7 @@ val bootstrap = BundleBootstrap(config)
 // and then calls exitProcess — the flow never completes in that case.
 bootstrap.validateAndLaunch().collect { event ->
     when (event) {
+        BundleStartEvent.Progress.CheckingForUpdates -> println("Checking for updates...")
         BundleStartEvent.Progress.ValidatingManifest -> println("Validating manifest...")
         is BundleStartEvent.Progress.ValidatingFiles -> {
             println("Validating files: ${event.percentCompleteInt}%")
@@ -125,6 +127,71 @@ bootstrap.validateAndLaunch().collect { event ->
         }
     }
 }
+```
+
+#### Update Modes
+
+The `updateMode` parameter on `BundleBootstrapConfig` controls how `validateAndLaunch()` behaves:
+
+| Mode | Behavior |
+|------|----------|
+| `UpdateMode.Manual` (default) | Validate existing bundle, download only if missing/invalid, then launch |
+| `UpdateMode.RequireLatest` | Always check server first, fail if network unavailable |
+| `UpdateMode.CheckOnLaunch` | Check server first, fall back to existing bundle if network unavailable |
+| `UpdateMode.Background(checkInterval)` | Launch like Manual, then check for updates in the background |
+
+```kotlin
+// Always require the latest version (fails without network)
+UpdateMode.RequireLatest
+
+// Check for updates but fall back to cached bundle if offline
+UpdateMode.CheckOnLaunch
+
+// Launch immediately, check for updates in the background
+UpdateMode.Background(checkInterval = 1.hours)
+
+// No automatic update checks (default)
+UpdateMode.Manual
+```
+
+In **Background** mode, when an update is downloaded, the shell sends a `ShellMessage.UpdateReady` JSON message to the bundle via the shell message bridge. The bundle can then call `restartProcess()` when ready to apply the update.
+
+#### Shell Message Bridge
+
+The shell can send JSON messages to the running bundle through the **shell message bridge**. This is used by Background update mode to notify the bundle when an update is ready.
+
+**Setup:** Set `shellMessageHandlerClass` in the manifest to a fully qualified class name. That class must have a `public static void onShellMessage(String json)` method:
+
+```kotlin
+// In your bundle's message handler class
+class MyMessageHandler {
+    companion object {
+        @JvmStatic
+        fun onShellMessage(json: String) {
+            val message = ShellMessage.decode(json)
+            when (message) {
+                is ShellMessage.UpdateReady -> {
+                    println("Update ready: build ${message.newBuildNumber}")
+                    // Apply when ready
+                    restartProcess()
+                }
+            }
+        }
+    }
+}
+```
+
+Set the handler class when creating bundles:
+
+```kotlin
+// In BundleCreatorTask
+shellMessageHandlerClass.set("com.myapp.MyMessageHandler")
+
+// Or in BundleManifestBuilder
+builder.build(
+    // ...
+    shellMessageHandlerClass = "com.myapp.MyMessageHandler",
+)
 ```
 
 ### Bundle Self-Update (Inside Running Bundle)
@@ -247,6 +314,7 @@ tasks.register("generateBundleKeys") {
 | `buildNumber` | `Property<Long>` | Yes | - | Build number (set by CI) |
 | `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
 | `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
+| `shellMessageHandlerClass` | `Property<String>` | No | null | Class for shell-to-bundle messages via `onShellMessage(String)` |
 | `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
 | `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable name containing private key |
 | `privateKeyFile` | `RegularFileProperty` | One required | - | File containing private key |

@@ -11,6 +11,9 @@ import io.runwork.bundle.updater.download.DownloadProgress
  */
 sealed class BundleStartEvent {
     sealed class Progress : BundleStartEvent() {
+        /** Checking the server for updates (emitted by RequireLatest and CheckOnLaunch modes) */
+        data object CheckingForUpdates : Progress()
+
         /** Loading and verifying the manifest (signature check) */
         data object ValidatingManifest : Progress()
 

@@ -45,6 +45,7 @@ class BundleManifestBuilder {
         minShellVersion: Int,
         zips: Map<String, PlatformBundle>,
         shellUpdateUrl: String? = null,
+        shellMessageHandlerClass: String? = null,
     ): BundleManifest {
         val bundleFiles = collectFilesWithPlatformConstraints(inputDir)
 
@@ -57,6 +58,7 @@ class BundleManifestBuilder {
             files = bundleFiles,
             mainClass = mainClass,
             zips = zips,
+            shellMessageHandlerClass = shellMessageHandlerClass,
             signature = "",
         )
     }

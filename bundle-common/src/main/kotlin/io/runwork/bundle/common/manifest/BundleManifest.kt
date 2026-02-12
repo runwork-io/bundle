@@ -38,6 +38,10 @@ data class BundleManifest(
     /** Map of platform ID (e.g., "macos-arm64") to platform-specific bundle info */
     val zips: Map<String, PlatformBundle>,
 
+    /** Fully qualified class name for handling shell messages via onShellMessage(String).
+     *  If null, the shell-to-bundle message bridge is not created. */
+    val shellMessageHandlerClass: String? = null,
+
     /** Ed25519 signature of the manifest (excluding this field), prefixed with "ed25519:" */
     val signature: String = "",
 ) {
