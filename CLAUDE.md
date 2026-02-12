@@ -95,7 +95,8 @@ bundle/
 │       │   └── HashVerifier.kt         # SHA-256 hashing
 │       ├── storage/
 │       │   └── ContentAddressableStore.kt
-│       └── BundleLaunchConfig.kt       # Config passed to bundle main()
+│       ├── BundleLaunchConfig.kt       # Config passed to bundle main()
+│       └── ShellMessage.kt             # Shell-to-bundle message protocol
 │
 ├── bundle-resources/                   # Resource resolution
 │   └── src/main/kotlin/io/runwork/bundle/resources/
@@ -107,6 +108,7 @@ bundle/
 │       ├── BundleBootstrap.kt          # Main orchestrator (validate/launch)
 │       ├── BundleBootstrapConfig.kt    # Shell-provided config
 │       ├── BundleValidationResult.kt   # Validation outcomes
+│       ├── UpdateMode.kt              # Update mode sealed class
 │       └── loader/
 │           ├── BundleClassLoader.kt    # Child-first classloader
 │           └── LoadedBundle.kt         # Launched bundle handle
@@ -140,11 +142,12 @@ bundle/
 ### bundle-common
 | Class | Purpose |
 |-------|---------|
-| `BundleManifest` | Core data model for bundle metadata |
+| `BundleManifest` | Core data model for bundle metadata (includes `shellMessageHandlerClass` for shell message bridge) |
 | `ContentAddressableStore` | Hash-based storage - store(), contains(), getPath() |
 | `HashVerifier` | SHA-256 computation using Okio |
 | `SignatureVerifier` | Ed25519 verification using JDK built-in |
 | `BundleLaunchConfig` | Config passed from shell to bundle's main() |
+| `ShellMessage` | Sealed class for shell-to-bundle messages (encode/decode JSON) |
 | `restartProcess()` | Restart current JVM process (spawn-then-exit) |
 
 ### bundle-resources
@@ -156,7 +159,9 @@ bundle/
 ### bundle-bootstrap
 | Class | Purpose |
 |-------|---------|
-| `BundleBootstrap` | Main orchestrator - validate() then launch() |
+| `BundleBootstrap` | Main orchestrator - validate() then launch(), dispatches by UpdateMode |
+| `BundleBootstrapConfig` | Shell-provided config including `updateMode` |
+| `UpdateMode` | Sealed class controlling update behavior (RequireLatest, CheckOnLaunch, Manual, Background) |
 | `BundleClassLoader` | Child-first classloader for bundle isolation |
 | `LoadedBundle` | Handle to a running bundle with message bridge |
 
@@ -192,6 +197,7 @@ bundle/
 | `buildNumber` | `Property<Long>` | Yes | - | Build number (set by CI) |
 | `minShellVersion` | `Property<Int>` | No | 1 | Minimum shell version required |
 | `shellUpdateUrl` | `Property<String>` | No | null | URL for shell updates |
+| `shellMessageHandlerClass` | `Property<String>` | No | null | Class for shell-to-bundle messages via `onShellMessage(String)` |
 | `privateKey` | `Property<String>` | One required | - | Base64-encoded private key (preferred for CI) |
 | `privateKeyEnvVar` | `Property<String>` | One required | - | Environment variable name containing private key |
 | `privateKeyFile` | `RegularFileProperty` | One required | - | File containing private key |
@@ -274,21 +280,56 @@ suspend fun <T> withStorageLock(block: suspend () -> T): T {
 
 ## Data Flow
 
-### Shell Startup (no bundle)
+### Update Modes
+
+`BundleBootstrapConfig.updateMode` controls how `validateAndLaunch()` behaves:
+
+| Mode | Behavior |
+|------|----------|
+| `Manual` (default) | Validate existing bundle → download only if missing/invalid → launch |
+| `RequireLatest` | Always check server first → download if newer → launch. **Fails if network unavailable.** |
+| `CheckOnLaunch` | Check server first → download if newer → launch. **Falls back to existing bundle if network unavailable.** |
+| `Background(checkInterval)` | Same as Manual for initial launch, then starts a background updater that notifies the bundle via `ShellMessage.UpdateReady` when a new version is ready |
+
+### Shell Startup (Manual mode, no bundle)
 1. `BundleBootstrap.validate()` → returns `NoBundleExists`
 2. `Updater.downloadLatest()` → fetches manifest, downloads files to CAS, prepares version
 3. `BundleBootstrap.validate()` → returns `Valid`
 4. `BundleBootstrap.launch()` → creates classloader, invokes main()
 
-### Shell Startup (bundle exists)
+### Shell Startup (Manual mode, bundle exists)
 1. `BundleBootstrap.validate()` → verifies signature and file hashes → returns `Valid`
 2. `BundleBootstrap.launch()` → creates classloader, invokes main()
 
+### Shell Startup (Background mode)
+1. Same as Manual for initial validate/download/launch
+2. After launch, creates a second `BundleUpdater` with `currentBuildNumber = manifest.buildNumber`
+3. Background coroutine collects `runInBackground()` events
+4. On `UpdateReady` → sends `ShellMessage.UpdateReady` to bundle via `loadedBundle.sendMessage()`
+5. Bundle receives message in `onShellMessage(String)`, decodes it, and can call `restartProcess()` when ready
+
 ### Bundle Self-Update (runtime)
-1. `Updater.start(callbacks)` → starts background coroutine
+1. `Updater.runInBackground()` → starts background coroutine
 2. Periodically fetches manifest, compares buildNumber
-3. If newer: downloads files, prepares version, calls `onUpdateReady()`
-4. Bundle calls `restartApplication()` to apply update
+3. If newer: downloads files, prepares version, emits `UpdateReady`
+4. Bundle calls `restartProcess()` to apply update
+
+### Shell-to-Bundle Message Bridge
+
+The shell communicates with the bundle via `ShellMessage` JSON messages delivered through the `onShellMessage(String)` method.
+
+**Setup:** Set `shellMessageHandlerClass` in the manifest to a fully qualified class name. That class must have a `public static void onShellMessage(String json)` method. If `shellMessageHandlerClass` is null (default), no message bridge is created.
+
+**Message format:**
+```json
+{"type":"UpdateReady","newBuildNumber":42,"currentBuildNumber":41}
+```
+
+**Graceful failure:** All message bridge failures are non-fatal:
+- Class not found → log warning, `sendMessage` is null
+- Method not found → log warning, `sendMessage` is null
+- Method not static → log warning, `sendMessage` is null
+- Exception during invocation → caught and logged, app continues
 
 ## Testing
 

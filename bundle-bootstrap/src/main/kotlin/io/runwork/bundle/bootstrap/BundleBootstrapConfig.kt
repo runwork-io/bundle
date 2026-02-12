@@ -30,6 +30,9 @@ data class BundleBootstrapConfig(
 
     /** Fully qualified main class name to invoke in the bundle */
     val mainClass: String,
+
+    /** Controls update behavior during [BundleBootstrap.validateAndLaunch] */
+    val updateMode: UpdateMode = UpdateMode.Manual,
 ) {
     /** The directory containing all bundle-related files (cas, versions, temp, manifest.json) */
     val bundleDir: Path get() = if (bundleSubdirectory.isEmpty()) appDataDir else appDataDir.resolve(bundleSubdirectory)
@@ -58,6 +61,7 @@ data class BundleBootstrapConfig(
         mainClass: String,
         bundleSubdirectory: String = "bundle",
         platform: Platform = Platform.current,
+        updateMode: UpdateMode = UpdateMode.Manual,
     ) : this(
         appDataDir = PlatformPaths.getDefaultAppDataDir(appId),
         bundleSubdirectory = bundleSubdirectory,
@@ -66,5 +70,6 @@ data class BundleBootstrapConfig(
         shellVersion = shellVersion,
         platform = platform,
         mainClass = mainClass,
+        updateMode = updateMode,
     )
 }
